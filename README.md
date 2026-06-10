@@ -7,6 +7,7 @@ Self-hosted Solana arbitrage bot with a token basket manager. Runs Jupiter arb c
 ## Features
 
 - **Arb bot** — Jupiter quote circuits (SOL → TOKEN → SOL, SOL → TOKEN → X → SOL), submitted atomically via Jito bundles
+- **Net profit threshold** — profit is computed after Jito tip, base, and priority fees; the spread monitor shows both net and gross
 - **Token basket** — hold any SPL/Token-2022 tokens at target weights; auto-rebalances on drift or schedule
 - **Dynamic USDC profit-taking** — USDC target weight shifts automatically based on basket PnL%
 - **PnL tracking** — SOL and USD baseline, 24h portfolio chart
@@ -66,7 +67,7 @@ All settings are live (no restart):
 |---|---|
 | Arb token mint | SPL token used as the arb circuit intermediate |
 | Arb amount (SOL) | SOL per arb leg when no basket is configured |
-| Min profit (bps) | Minimum profit to execute (e.g. 500 = 5%) |
+| Min profit (bps) | Minimum **net** profit to execute, after execution costs (e.g. 500 = 5%) |
 
 ### Basket
 
