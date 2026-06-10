@@ -120,6 +120,11 @@ sudo systemctl status basket-manager
 
 ## Changelog
 
+### v2.1.7
+- Replace bolt icon with basket icon in dashboard header
+- Add SVG favicon (basket with Solana brand colors) — browser tab now shows basket logo
+- Update page title from "Arb Agent" to "Basket Manager"
+
 ### v2.1.6
 - Portfolio value chart now supports 24H / 7D / 30D windows — toggle buttons in the chart header
 - Value history extended from 24h to 30 days of storage (`data/value-history.json`)
