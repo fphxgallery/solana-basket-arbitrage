@@ -217,9 +217,26 @@ export async function refreshHoldings(
 
   // Compute USD pnlPct for dynamic USDC weight — SOL price changes shouldn't trigger profit-taking
   const baselineUsd = basketStore.baselineValueUsd;
-  const pnlPctUsd = baselineUsd != null && baselineUsd > 0 && totalValueUsd > 0
-    ? ((totalValueUsd - baselineUsd) / baselineUsd) * 100
-    : null;
+  let pnlPctUsd: number | null = null;
+  if (baselineUsd != null && baselineUsd > 0 && totalValueUsd > 0) {
+    if (basketStore.config.hwmEnabled) {
+      const hwm = basketStore.hwmValueUsd;
+      const hwmCapturedAt = basketStore.hwmCapturedAt;
+      let effectiveHwm: number;
+      if (hwm == null || hwmCapturedAt == null || totalValueUsd >= hwm) {
+        effectiveHwm = totalValueUsd;
+        basketStore.updateHwm(totalValueUsd);
+      } else {
+        const elapsedDays = (Date.now() - hwmCapturedAt) / 86_400_000;
+        const decayedGap = (hwm - totalValueUsd) * Math.pow(0.5, elapsedDays / basketStore.config.hwmHalfLifeDays);
+        effectiveHwm = totalValueUsd + decayedGap;
+        console.log(`[basket] HWM: peak=$${hwm.toFixed(2)} effective=$${effectiveHwm.toFixed(2)} current=$${totalValueUsd.toFixed(2)} (${elapsedDays.toFixed(1)}d elapsed)`);
+      }
+      pnlPctUsd = ((effectiveHwm - baselineUsd) / baselineUsd) * 100;
+    } else {
+      pnlPctUsd = ((totalValueUsd - baselineUsd) / baselineUsd) * 100;
+    }
+  }
 
   const effectiveWeights = computeEffectiveWeights(tokens, pnlPctUsd);
 

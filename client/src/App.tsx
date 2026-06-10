@@ -393,7 +393,7 @@ function Dashboard() {
     }
   }
 
-  async function saveBasketSettings(patch: { driftThresholdPct?: number; rebalanceIntervalHours?: number }) {
+  async function saveBasketSettings(patch: { driftThresholdPct?: number; rebalanceIntervalHours?: number; hwmEnabled?: boolean; hwmHalfLifeDays?: number }) {
     await fetch("/api/basket/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1103,7 +1103,7 @@ function Dashboard() {
                   <div className="text-xs text-gray-400 mb-3 flex items-center gap-1.5">
                     <CircleDollarSign className="w-3.5 h-3.5" /> BASKET SETTINGS
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3 mb-3">
                     <label className="block">
                       <span className="text-xs text-gray-600 block mb-1">Drift threshold (%)</span>
                       <input type="number" min="1" max="50" step="0.5"
@@ -1120,6 +1120,29 @@ function Dashboard() {
                         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
                       />
                     </label>
+                  </div>
+                  {/* HWM profit lock */}
+                  <div className="border-t border-gray-800/60 pt-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600">High-water mark profit lock</span>
+                      <button
+                        onClick={() => saveBasketSettings({ hwmEnabled: !(basket?.config.hwmEnabled ?? false) })}
+                        className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${basket?.config.hwmEnabled ? "bg-violet-600" : "bg-gray-700"}`}
+                      >
+                        <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${basket?.config.hwmEnabled ? "left-[18px]" : "left-0.5"}`} />
+                      </button>
+                    </div>
+                    {basket?.config.hwmEnabled && (
+                      <label className="block">
+                        <span className="text-xs text-gray-600 block mb-1">Decay half-life (days)</span>
+                        <input type="number" min="1" max="90" step="1"
+                          key={basket.config.hwmHalfLifeDays}
+                          defaultValue={basket.config.hwmHalfLifeDays ?? 7}
+                          onBlur={(e) => saveBasketSettings({ hwmHalfLifeDays: parseFloat(e.target.value) })}
+                          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
+                        />
+                      </label>
+                    )}
                   </div>
                 </div>
               </div>

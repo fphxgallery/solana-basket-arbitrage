@@ -12,6 +12,8 @@ export interface BasketConfig {
   tokens: BasketToken[];
   driftThresholdPct: number;      // rebalance trigger per token, default 5
   rebalanceIntervalHours: number; // forced rebalance cadence, default 24
+  hwmEnabled: boolean;            // high-water mark profit lock, default false
+  hwmHalfLifeDays: number;        // HWM decay half-life in days, default 7
 }
 
 export interface TokenHolding {
@@ -32,6 +34,8 @@ const DEFAULTS: BasketConfig = {
   tokens: [],
   driftThresholdPct: 1,
   rebalanceIntervalHours: 24,
+  hwmEnabled: false,
+  hwmHalfLifeDays: 7,
 };
 
 class BasketStore extends EventEmitter {
@@ -46,6 +50,9 @@ class BasketStore extends EventEmitter {
   baselineValueSol: number | null = null;
   baselineValueUsd: number | null = null;
   baselineTimestamp: number | null = null;
+  /** High-water mark for dynamic USDC weight profit lock. */
+  hwmValueUsd: number | null = null;
+  hwmCapturedAt: number | null = null;
 
   get pnlSol(): number | null {
     if (this.baselineValueSol == null || this.totalValueSol === 0) return null;
@@ -82,6 +89,8 @@ class BasketStore extends EventEmitter {
           baselineValueUsd?: number;
           baselineTimestamp?: number;
           lastRebalanceAt?: number;
+          hwmValueUsd?: number;
+          hwmCapturedAt?: number;
         };
         if (raw.priceCache) this.priceCache = raw.priceCache;
         if (raw.totalValueUsd) this.totalValueUsd = raw.totalValueUsd;
@@ -89,7 +98,9 @@ class BasketStore extends EventEmitter {
         if (raw.baselineValueUsd != null) this.baselineValueUsd = raw.baselineValueUsd;
         if (raw.baselineTimestamp != null) this.baselineTimestamp = raw.baselineTimestamp;
         if (raw.lastRebalanceAt != null) this.lastRebalanceAt = raw.lastRebalanceAt;
-        const { priceCache: _pc, totalValueUsd: _tvu, baselineValueSol: _bv, baselineValueUsd: _bvu, baselineTimestamp: _bt, lastRebalanceAt: _lr, ...config } = raw;
+        if (raw.hwmValueUsd != null) this.hwmValueUsd = raw.hwmValueUsd;
+        if (raw.hwmCapturedAt != null) this.hwmCapturedAt = raw.hwmCapturedAt;
+        const { priceCache: _pc, totalValueUsd: _tvu, baselineValueSol: _bv, baselineValueUsd: _bvu, baselineTimestamp: _bt, lastRebalanceAt: _lr, hwmValueUsd: _hv, hwmCapturedAt: _hc, ...config } = raw;
         // Merge defaults — a basket.json missing a field (old version, hand edit)
         // must not produce undefined settings (NaN/dead drift checks)
         return { ...DEFAULTS, ...config };
@@ -109,6 +120,8 @@ class BasketStore extends EventEmitter {
         baselineValueUsd: this.baselineValueUsd,
         baselineTimestamp: this.baselineTimestamp,
         lastRebalanceAt: this.lastRebalanceAt,
+        hwmValueUsd: this.hwmValueUsd,
+        hwmCapturedAt: this.hwmCapturedAt,
       }, null, 2));
     } catch (e) {
       console.error("[basket-store] save failed:", e);
@@ -154,6 +167,12 @@ class BasketStore extends EventEmitter {
     this.baselineTimestamp = this.baselineValueSol != null ? Date.now() : null;
     this._save();
     this.emit("changed"); // push updated pnl (now 0%) to SSE clients immediately
+  }
+
+  updateHwm(valueUsd: number) {
+    this.hwmValueUsd = valueUsd;
+    this.hwmCapturedAt = Date.now();
+    this._save();
   }
 
   recordRebalance() {

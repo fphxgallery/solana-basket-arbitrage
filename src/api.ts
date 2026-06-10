@@ -121,9 +121,11 @@ router.put("/basket/tokens", (req: Request, res: Response) => {
 
 // Update basket settings (drift threshold, rebalance interval)
 router.patch("/basket/settings", (req: Request, res: Response) => {
-  const { driftThresholdPct, rebalanceIntervalHours } = req.body as {
+  const { driftThresholdPct, rebalanceIntervalHours, hwmEnabled, hwmHalfLifeDays } = req.body as {
     driftThresholdPct?: number;
     rebalanceIntervalHours?: number;
+    hwmEnabled?: boolean;
+    hwmHalfLifeDays?: number;
   };
   const patch: Parameters<typeof basketStore.updateSettings>[0] = {};
   if (driftThresholdPct != null) {
@@ -139,6 +141,20 @@ router.patch("/basket/settings", (req: Request, res: Response) => {
       return;
     }
     patch.rebalanceIntervalHours = rebalanceIntervalHours;
+  }
+  if (hwmEnabled != null) {
+    if (typeof hwmEnabled !== "boolean") {
+      res.status(400).json({ error: "hwmEnabled must be a boolean" });
+      return;
+    }
+    patch.hwmEnabled = hwmEnabled;
+  }
+  if (hwmHalfLifeDays != null) {
+    if (typeof hwmHalfLifeDays !== "number" || hwmHalfLifeDays <= 0) {
+      res.status(400).json({ error: "hwmHalfLifeDays must be a positive number" });
+      return;
+    }
+    patch.hwmHalfLifeDays = hwmHalfLifeDays;
   }
   basketStore.updateSettings(patch);
   res.json(basketStore.config);

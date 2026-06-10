@@ -39,6 +39,8 @@ export interface BasketState {
     tokens: BasketToken[];
     driftThresholdPct: number;
     rebalanceIntervalHours: number;
+    hwmEnabled: boolean;
+    hwmHalfLifeDays: number;
   };
   holdings: TokenHolding[];
   totalValueSol: number;
