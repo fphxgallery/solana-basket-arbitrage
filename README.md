@@ -117,6 +117,15 @@ sudo systemctl status basket-manager
 
 ## Changelog
 
+### v2.0.3
+- Add Telegram notifications — bot start/stop and rebalance summary (per-swap confirmed/failed)
+- Configurable from the dashboard UI (TELEGRAM card); token stored in `data/telegram.json`, never exposed via API
+
+### v2.0.2
+- Fix phantom `pending` entries in rebalance log — dust-skipped swaps no longer added to trade history
+- Deduplicate `getBalance` RPC call — wallet balance read from SOL balance already fetched by `refreshHoldings`
+- Remove unused `ws` / `@types/ws` dependencies
+
 ### v2.0.1
 - Fix `parseInt` precision on large Jupiter `outAmount` values (use `Number(BigInt(...))`)
 - Remove `JUPITER_API_KEY` prompt from installer — no longer used
