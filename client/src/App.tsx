@@ -223,6 +223,7 @@ function Dashboard() {
   const [walletWorking, setWalletWorking] = useState(false);
   const [basket, setBasket] = useState<BasketState | null>(null);
   const [rightTab, setRightTab] = useState<"trades" | "basket" | "dynamic">("trades");
+  const [tradePage, setTradePage] = useState(0);
   const [basketEditorOpen, setBasketEditorOpen] = useState(false);
   const [editorTokens, setEditorTokens] = useState<BasketToken[]>([]);
   const [editorMint, setEditorMint] = useState("");
@@ -1086,7 +1087,7 @@ function Dashboard() {
             {/* Tab bar */}
             <div className="flex items-center border-b border-gray-800 px-4">
               <button
-                onClick={() => setRightTab("trades")}
+                onClick={() => { setRightTab("trades"); setTradePage(0); }}
                 className={`flex items-center gap-1.5 text-xs py-3 mr-4 border-b-2 transition-colors ${rightTab === "trades" ? "border-violet-500 text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}
               >
                 <ArrowRightLeft className="w-3.5 h-3.5" /> REBALANCE LOG
@@ -1114,26 +1115,53 @@ function Dashboard() {
                   <div className="px-4 py-12 text-center text-gray-600 text-sm">
                     No rebalances yet — start the bot to track and rebalance the basket
                   </div>
-                ) : (
-                  <div className="divide-y divide-gray-800/60">
-                    {state.trades.map((t) => (
-                      <div key={t.id} className="px-4 py-3 hover:bg-gray-800/30 transition-colors">
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <TradeStatusBadge status={t.status} />
-                            <span className="text-sm text-gray-300">{t.route}</span>
+                ) : (() => {
+                  const PAGE_SIZE = 12;
+                  const totalPages = Math.ceil(state.trades.length / PAGE_SIZE);
+                  const page = Math.min(tradePage, totalPages - 1);
+                  const pageTrades = state.trades.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+                  return (
+                    <>
+                      <div className="divide-y divide-gray-800/60">
+                        {pageTrades.map((t) => (
+                          <div key={t.id} className="px-4 py-3 hover:bg-gray-800/30 transition-colors">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2">
+                                <TradeStatusBadge status={t.status} />
+                                <span className="text-sm text-gray-300">{t.route}</span>
+                              </div>
+                              <span className="text-xs text-gray-600">{formatTime(t.timestamp)}</span>
+                            </div>
+                            {t.inputSol > 0 && (
+                              <div className="text-xs text-gray-600">
+                                {t.inputSol.toFixed(4)} SOL value swapped
+                              </div>
+                            )}
                           </div>
-                          <span className="text-xs text-gray-600">{formatTime(t.timestamp)}</span>
-                        </div>
-                        {t.inputSol > 0 && (
-                          <div className="text-xs text-gray-600">
-                            {t.inputSol.toFixed(4)} SOL value swapped
-                          </div>
-                        )}
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                )}
+                      {totalPages > 1 && (
+                        <div className="flex items-center justify-between px-4 py-2 border-t border-gray-800/60">
+                          <button
+                            onClick={() => setTradePage((p) => Math.max(0, p - 1))}
+                            disabled={page === 0}
+                            className="text-xs text-gray-500 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          >
+                            ← prev
+                          </button>
+                          <span className="text-xs text-gray-600">{page + 1} / {totalPages}</span>
+                          <button
+                            onClick={() => setTradePage((p) => Math.min(totalPages - 1, p + 1))}
+                            disabled={page === totalPages - 1}
+                            className="text-xs text-gray-500 hover:text-gray-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                          >
+                            next →
+                          </button>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
               </>
             )}
 

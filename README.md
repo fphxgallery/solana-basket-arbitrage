@@ -120,6 +120,9 @@ sudo systemctl status basket-manager
 
 ## Changelog
 
+### v2.1.8
+- Rebalance log now paginates at 12 entries per page with prev/next controls
+
 ### v2.1.7
 - Replace bolt icon with basket icon in dashboard header
 - Add SVG favicon (basket with Solana brand colors) — browser tab now shows basket logo
