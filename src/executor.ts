@@ -97,7 +97,9 @@ export async function executeArb(
   const route = opp.routeLabels.join(" → ");
 
 
-  console.log(`[executor] arb +${(opp.profitBps / 100).toFixed(2)}%  ${route}`);
+  console.log(
+    `[executor] arb net +${(opp.profitBps / 100).toFixed(2)}% (gross ${(opp.grossProfitBps / 100).toFixed(2)}%, cost ${(Number(opp.costLamports) / 1e9).toFixed(6)} SOL)  ${route}`,
+  );
 
   const swapResponses = await Promise.all(
     opp.quotes.map((q) => getSwapTransaction(q, keypair.publicKey.toBase58())),

@@ -34,8 +34,10 @@ export interface ArbOpportunity {
   dexLabels: string[];          // DEX used per leg ["Raydium", "Meteora", ...]
   inputLamports: bigint;
   outputLamports: bigint;
-  profitLamports: bigint;
-  profitBps: number;
+  profitLamports: bigint;      // net of execution costs (tip + base + priority fees)
+  profitBps: number;           // net
+  grossProfitBps: number;      // raw quote spread
+  costLamports: bigint;        // estimated execution cost
 }
 
 export interface SwapResponse {

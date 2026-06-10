@@ -93,7 +93,8 @@ function TradeStatusBadge({ status }: { status: TradeRecord["status"] }) {
 }
 
 interface SpreadResult {
-  profitBps: number;
+  profitBps: number;       // net of execution costs
+  grossProfitBps?: number;
   routeLabels: string[];
   dexLabels: string[];
   inputSol: number;
@@ -773,10 +774,16 @@ function Dashboard() {
                 <>
                   <div className={`text-2xl font-bold mb-2 ${color}`}>
                     {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
+                    <span className="ml-1.5 text-xs font-normal text-gray-500">net</span>
                     {aboveThreshold && (
                       <span className="ml-2 text-xs font-normal px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">above target</span>
                     )}
                   </div>
+                  {spread.grossProfitBps != null && (
+                    <div className="text-xs text-gray-600 mb-1">
+                      gross {spread.grossProfitBps >= 0 ? "+" : ""}{(spread.grossProfitBps / 100).toFixed(2)}%
+                    </div>
+                  )}
                   <div className="text-xs text-gray-400 mb-0.5">
                     {spread.routeLabels.join(" → ")}
                   </div>

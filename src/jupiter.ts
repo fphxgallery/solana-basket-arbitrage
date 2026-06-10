@@ -5,6 +5,20 @@ import type { ArbOpportunity, JupiterQuote, SwapResponse } from "./types.js";
 
 const MAX_PRICE_IMPACT_PCT = 3;
 const MAX_BELIEVABLE_PROFIT_BPS = 2000; // 20%
+const BASE_FEE_LAMPORTS = 5000n; // per signature; all our txs are single-sig
+
+/**
+ * Total execution cost of a circuit: Jito tip + base fees for tip tx + N swap
+ * txs + priority fees. Priority fee uses the configured max per swap — actual
+ * is dynamic and ≤ max, so net profit is a conservative floor.
+ */
+export function circuitCostLamports(legs: number): bigint {
+  return (
+    BigInt(CONFIG.JITO_TIP_LAMPORTS) +
+    BASE_FEE_LAMPORTS * BigInt(legs + 1) +
+    BigInt(CONFIG.PRIORITY_FEE_LAMPORTS) * BigInt(legs)
+  );
+}
 
 /**
  * Arb amount: % of total portfolio value.
@@ -88,7 +102,8 @@ async function fetchQuote(
 // ── Spread cache ──────────────────────────────────────────────────────────────
 
 export interface SpreadResult {
-  profitBps: number;
+  profitBps: number;       // net of execution costs
+  grossProfitBps: number;  // raw quote spread
   routeLabels: string[];
   dexLabels: string[];
   inputSol: number;
@@ -110,7 +125,10 @@ interface CircuitResult {
   dexLabels: string[];
   inputLamports: bigint;
   outputLamports: bigint;
-  profitBps: number;
+  costLamports: bigint;
+  netProfitLamports: bigint;
+  profitBps: number;       // net of execution costs
+  grossProfitBps: number;
 }
 
 /**
@@ -140,13 +158,17 @@ async function runCircuit(mints: string[]): Promise<CircuitResult | null> {
   }
 
   const outputLamports = amount;
-  const profitBps = Number(((outputLamports - inputLamports) * 10000n) / inputLamports);
+  const grossProfitBps = Number(((outputLamports - inputLamports) * 10000n) / inputLamports);
 
   // Sanity cap — anything above this is almost certainly a bad quote
-  if (profitBps > MAX_BELIEVABLE_PROFIT_BPS) {
-    console.warn(`[jupiter] rejected circuit: profit ${(profitBps / 100).toFixed(2)}% exceeds sanity cap`);
+  if (grossProfitBps > MAX_BELIEVABLE_PROFIT_BPS) {
+    console.warn(`[jupiter] rejected circuit: profit ${(grossProfitBps / 100).toFixed(2)}% exceeds sanity cap`);
     return null;
   }
+
+  const costLamports = circuitCostLamports(mints.length - 1);
+  const netProfitLamports = outputLamports - inputLamports - costLamports;
+  const profitBps = Number((netProfitLamports * 10000n) / inputLamports);
 
   return {
     quotes,
@@ -155,7 +177,10 @@ async function runCircuit(mints: string[]): Promise<CircuitResult | null> {
     dexLabels: quotes.map((q) => q.routePlan[0]?.swapInfo.label ?? "?"),
     inputLamports,
     outputLamports,
+    costLamports,
+    netProfitLamports,
     profitBps,
+    grossProfitBps,
   };
 }
 
@@ -176,6 +201,7 @@ export async function checkArbOpportunity(): Promise<ArbOpportunity | null> {
     // Update spread cache with every successful circuit run
     const spread: SpreadResult = {
       profitBps: r.profitBps,
+      grossProfitBps: r.grossProfitBps,
       routeLabels: r.routeLabels,
       dexLabels: r.dexLabels,
       inputSol: Number(r.inputLamports) / 1e9,
@@ -184,9 +210,8 @@ export async function checkArbOpportunity(): Promise<ArbOpportunity | null> {
     };
     if (!bestSpread || r.profitBps > bestSpread.profitBps) bestSpread = spread;
 
-    // Arb: must be profitable and above threshold
-    const profitLamports = r.outputLamports - r.inputLamports;
-    if (profitLamports > 0n && r.profitBps >= runtimeConfig.MIN_PROFIT_BPS) {
+    // Arb: must be net-profitable (after tip + fees) and above threshold
+    if (r.netProfitLamports > 0n && r.profitBps >= runtimeConfig.MIN_PROFIT_BPS) {
       const arb: ArbOpportunity = {
         quotes: r.quotes,
         route: r.route,
@@ -194,8 +219,10 @@ export async function checkArbOpportunity(): Promise<ArbOpportunity | null> {
         dexLabels: r.dexLabels,
         inputLamports: r.inputLamports,
         outputLamports: r.outputLamports,
-        profitLamports,
+        profitLamports: r.netProfitLamports,
         profitBps: r.profitBps,
+        grossProfitBps: r.grossProfitBps,
+        costLamports: r.costLamports,
       };
       if (!bestArb || arb.profitBps > bestArb.profitBps) bestArb = arb;
     }
@@ -221,6 +248,7 @@ export async function getSpread(): Promise<SpreadResult | null> {
     if (!r) continue;
     const s: SpreadResult = {
       profitBps: r.profitBps,
+      grossProfitBps: r.grossProfitBps,
       routeLabels: r.routeLabels,
       dexLabels: r.dexLabels,
       inputSol: Number(r.inputLamports) / 1e9,
