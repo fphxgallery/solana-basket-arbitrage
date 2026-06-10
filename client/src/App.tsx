@@ -6,6 +6,7 @@ import {
   BarChart3,
   Check,
   CircleDollarSign,
+  Clock,
   Copy,
   Cpu,
   Download,
@@ -241,12 +242,16 @@ function Dashboard() {
   const [rebalanceMsg, setRebalanceMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [valueHistory, setValueHistory] = useState<ValuePoint[]>([]);
   const [solUsd, setSolUsd] = useState<number>(0);
-  const [telegram, setTelegram] = useState<{ configured: boolean; chatId?: string } | null>(null);
+  const [telegram, setTelegram] = useState<{ configured: boolean; chatId?: string; reportEnabled: boolean; reportTime: string | null } | null>(null);
   const [telegramToken, setTelegramToken] = useState("");
   const [telegramChatId, setTelegramChatId] = useState("");
   const [telegramError, setTelegramError] = useState<string | null>(null);
   const [telegramTesting, setTelegramTesting] = useState(false);
   const [telegramTestMsg, setTelegramTestMsg] = useState<string | null>(null);
+  const [reportEnabled, setReportEnabled] = useState(false);
+  const [reportTime, setReportTime] = useState("08:00");
+  const [reportSending, setReportSending] = useState(false);
+  const [reportSendMsg, setReportSendMsg] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
   // Basket fetch on load
@@ -273,8 +278,12 @@ function Dashboard() {
   // Telegram
   useEffect(() => {
     fetch("/api/telegram")
-      .then((r) => r.json() as Promise<{ configured: boolean; chatId?: string }>)
-      .then(setTelegram)
+      .then((r) => r.json() as Promise<{ configured: boolean; chatId?: string; reportEnabled: boolean; reportTime: string | null }>)
+      .then((d) => {
+        setTelegram(d);
+        setReportEnabled(d.reportEnabled ?? false);
+        if (d.reportTime) setReportTime(d.reportTime);
+      })
       .catch(() => {});
   }, []);
 
@@ -353,6 +362,33 @@ function Dashboard() {
     } finally {
       setTelegramTesting(false);
       setTimeout(() => setTelegramTestMsg(null), 3000);
+    }
+  }
+
+  async function saveReportSchedule(patch: { enabled?: boolean; time?: string }) {
+    const r = await fetch("/api/telegram/report-schedule", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    });
+    if (r.ok) {
+      const d = await r.json() as { reportEnabled: boolean; reportTime: string | null };
+      setReportEnabled(d.reportEnabled);
+      if (d.reportTime) setReportTime(d.reportTime);
+    }
+  }
+
+  async function sendReportNow() {
+    setReportSending(true);
+    setReportSendMsg(null);
+    try {
+      const r = await fetch("/api/telegram/report", { method: "POST" });
+      setReportSendMsg(r.ok ? "Sent!" : "Failed");
+    } catch {
+      setReportSendMsg("Failed");
+    } finally {
+      setReportSending(false);
+      setTimeout(() => setReportSendMsg(null), 3000);
     }
   }
 
@@ -965,6 +1001,49 @@ function Dashboard() {
                   <Check className="w-3 h-3" /> Connect
                 </button>
               </>
+            )}
+          </div>
+
+          {/* Daily Report */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-gray-400 text-xs mb-3">
+              <Clock className="w-3.5 h-3.5" />
+              DAILY REPORT
+            </div>
+            {!telegram?.configured ? (
+              <p className="text-xs text-gray-600">Connect Telegram to enable daily reports.</p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-gray-600">Scheduled</span>
+                  <button
+                    onClick={() => saveReportSchedule({ enabled: !reportEnabled })}
+                    className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${reportEnabled ? "bg-violet-600" : "bg-gray-700"}`}
+                  >
+                    <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${reportEnabled ? "left-[18px]" : "left-0.5"}`} />
+                  </button>
+                </div>
+                {reportEnabled && (
+                  <label className="block">
+                    <span className="text-xs text-gray-600 block mb-1">Send at (server local time)</span>
+                    <input
+                      type="time"
+                      value={reportTime}
+                      onChange={(e) => setReportTime(e.target.value)}
+                      onBlur={(e) => saveReportSchedule({ time: e.target.value })}
+                      className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
+                    />
+                  </label>
+                )}
+                <button
+                  onClick={sendReportNow}
+                  disabled={reportSending}
+                  className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700 transition-colors disabled:opacity-50"
+                >
+                  {reportSending ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                  {reportSendMsg ?? "Send Report Now"}
+                </button>
+              </div>
             )}
           </div>
 

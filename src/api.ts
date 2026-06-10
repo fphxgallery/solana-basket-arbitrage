@@ -6,7 +6,7 @@ import { walletExists, getWalletPublicKey, createWallet, importWallet } from "./
 import { basketStore, type BasketToken } from "./basket-store.js";
 import { lookupTokenSymbol } from "./basket.js";
 import { valueHistory, getSolUsd } from "./value-history.js";
-import { getTelegramStatus, setTelegramConfig, clearTelegramConfig, notify } from "./telegram.js";
+import { getTelegramStatus, setTelegramConfig, clearTelegramConfig, notify, setReportSchedule, sendDailyReport } from "./telegram.js";
 
 export const router = Router();
 
@@ -233,6 +233,39 @@ router.post("/telegram/test", async (_req: Request, res: Response) => {
   }
   await notify("🔔 Test message from Basket Manager");
   res.json({ ok: true });
+});
+
+router.post("/telegram/report", async (_req: Request, res: Response) => {
+  if (!getTelegramStatus().configured) {
+    res.status(400).json({ error: "not configured" });
+    return;
+  }
+  try {
+    await sendDailyReport();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+router.patch("/telegram/report-schedule", (req: Request, res: Response) => {
+  const { enabled, time } = req.body as { enabled?: boolean; time?: string };
+  if (enabled != null && typeof enabled !== "boolean") {
+    res.status(400).json({ error: "enabled must be boolean" });
+    return;
+  }
+  if (time != null) {
+    if (typeof time !== "string" || !/^\d{2}:\d{2}$/.test(time)) {
+      res.status(400).json({ error: "time must be HH:MM (24h)" });
+      return;
+    }
+  }
+  const current = getTelegramStatus();
+  setReportSchedule(
+    enabled !== undefined ? enabled : current.reportEnabled,
+    time !== undefined ? time : current.reportTime,
+  );
+  res.json(getTelegramStatus());
 });
 
 // ── Wallet ────────────────────────────────────────────────────────────────────

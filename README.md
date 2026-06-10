@@ -120,6 +120,11 @@ sudo systemctl status basket-manager
 
 ## Changelog
 
+### v2.1.3
+- Add daily Telegram report — sends portfolio value (USD + SOL), P&L, and per-token current/target weights
+- New **Daily Report** card in the dashboard (below Telegram settings) with enable toggle, time picker (server local time), and Send Report Now button
+- Report schedule persisted in `data/telegram.json`; time checked every minute by the bot
+
 ### v2.1.2
 - Fix swap confirmation: on timeout, poll `getSignatureStatus` once (5s delay) before marking failed — prevents false-failed rebalance swaps on slow confirmation
 - Fix HWM disk writes: `updateHwm` only writes on a genuinely new peak, not on every 3-min refresh at steady-state

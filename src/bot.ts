@@ -5,13 +5,29 @@ import { store } from "./store.js";
 import { basketStore } from "./basket-store.js";
 import { refreshHoldings, needsRebalance, executeRebalance } from "./basket.js";
 import { recordSnapshot } from "./value-history.js";
-import { notify } from "./telegram.js";
+import { notify, getReportSchedule, sendDailyReport } from "./telegram.js";
 
 let balanceTimer: NodeJS.Timeout | null = null;
 let rebalanceTimer: NodeJS.Timeout | null = null;
+let reportTimer: NodeJS.Timeout | null = null;
 let rebalancing = false;
 let connection: Connection | null = null;
 let keypair: Keypair | null = null;
+let lastReportDate: string | null = null;
+
+function checkDailyReport() {
+  const { enabled, time } = getReportSchedule();
+  if (!enabled || !time) return;
+
+  const now = new Date();
+  const currentTime = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+  const today = now.toISOString().slice(0, 10);
+
+  if (currentTime === time && lastReportDate !== today) {
+    lastReportDate = today;
+    sendDailyReport().catch((e) => console.error("[bot] daily report failed:", e));
+  }
+}
 
 async function refreshBasket() {
   if (!connection || !keypair) return;
@@ -61,16 +77,19 @@ export function startBot() {
   // Check rebalance every 5 minutes
   rebalanceTimer = setInterval(() => tryRebalance().catch(console.error), 5 * 60_000);
 
+  // Check daily report schedule every minute
+  reportTimer = setInterval(checkDailyReport, 60_000);
+
   refreshBasket();
 }
 
 export function stopBot() {
   if (!store.botState.running) return;
 
-  for (const t of [balanceTimer, rebalanceTimer]) {
+  for (const t of [balanceTimer, rebalanceTimer, reportTimer]) {
     if (t) clearInterval(t);
   }
-  balanceTimer = rebalanceTimer = null;
+  balanceTimer = rebalanceTimer = reportTimer = null;
 
   rebalancing = false;
   connection = null;
