@@ -119,6 +119,11 @@ sudo systemctl status basket-manager
 
 ## Changelog
 
+### v2.1.1
+- Add **Dynamic Weight** tab — dedicated UI for the profit-taking curve and high-water mark settings
+- Profit-taking curve is now fully configurable: editable [PnL%, USDC%] breakpoints, cap above max, add/delete rows, reset to defaults
+- High-water mark controls moved from Basket Settings into the Dynamic Weight tab
+
 ### v2.1.0
 - Add high-water mark profit lock for dynamic USDC weight — USDC target weight locks in at portfolio peaks and releases gradually via configurable exponential decay (default 7-day half-life)
 - Configurable from dashboard: toggle + half-life input in Basket Settings panel
