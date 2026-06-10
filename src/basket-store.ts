@@ -12,7 +12,6 @@ export interface BasketConfig {
   tokens: BasketToken[];
   driftThresholdPct: number;      // rebalance trigger per token, default 5
   rebalanceIntervalHours: number; // forced rebalance cadence, default 24
-  arbSizingPct: number;           // % of total basket value per arb leg, default 10
 }
 
 export interface TokenHolding {
@@ -33,7 +32,6 @@ const DEFAULTS: BasketConfig = {
   tokens: [],
   driftThresholdPct: 1,
   rebalanceIntervalHours: 24,
-  arbSizingPct: 10,
 };
 
 class BasketStore extends EventEmitter {
@@ -93,7 +91,7 @@ class BasketStore extends EventEmitter {
         if (raw.lastRebalanceAt != null) this.lastRebalanceAt = raw.lastRebalanceAt;
         const { priceCache: _pc, totalValueUsd: _tvu, baselineValueSol: _bv, baselineValueUsd: _bvu, baselineTimestamp: _bt, lastRebalanceAt: _lr, ...config } = raw;
         // Merge defaults — a basket.json missing a field (old version, hand edit)
-        // must not produce undefined settings (NaN arb sizing, dead drift checks)
+        // must not produce undefined settings (NaN/dead drift checks)
         return { ...DEFAULTS, ...config };
       }
     } catch { /* ignore, use defaults */ }

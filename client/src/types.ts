@@ -39,7 +39,6 @@ export interface BasketState {
     tokens: BasketToken[];
     driftThresholdPct: number;
     rebalanceIntervalHours: number;
-    arbSizingPct: number;
   };
   holdings: TokenHolding[];
   totalValueSol: number;
@@ -65,9 +64,4 @@ export interface AppState {
   totalProfitSol: number;
   totalTrades: number;
   walletBalanceSol: number | null;
-  config: {
-    arbAmountSol: number;
-    minProfitBps: number;
-    tokenMint: string;
-  };
 }

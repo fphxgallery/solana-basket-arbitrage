@@ -1,20 +1,14 @@
 import { Connection, Keypair } from "@solana/web3.js";
 import { CONFIG } from "./config.js";
-import { checkArbOpportunity } from "./jupiter.js";
-import { executeArb, loadKeypair } from "./executor.js";
-import { startWatcher, type Watcher } from "./watcher.js";
+import { loadKeypair } from "./wallet.js";
 import { store } from "./store.js";
 import { basketStore } from "./basket-store.js";
 import { refreshHoldings, needsRebalance, executeRebalance } from "./basket.js";
 import { recordSnapshot } from "./value-history.js";
 
-let watcher: Watcher | null = null;
-let pollTimer: NodeJS.Timeout | null = null;
 let balanceTimer: NodeJS.Timeout | null = null;
 let rebalanceTimer: NodeJS.Timeout | null = null;
-let pending = 0;
 let rebalancing = false;
-let lastArbAt = 0;
 let connection: Connection | null = null;
 let keypair: Keypair | null = null;
 
@@ -40,7 +34,6 @@ async function refreshBasket() {
 
 async function tryRebalance() {
   if (!connection || !keypair || rebalancing) return;
-  if (pending > 0) return; // don't spend SOL while an arb bundle is in flight
   if (!needsRebalance()) return;
 
   rebalancing = true;
@@ -53,26 +46,6 @@ async function tryRebalance() {
     console.error("[bot] rebalance failed:", e);
   } finally {
     rebalancing = false;
-  }
-}
-
-async function tryArb() {
-  if (!connection || !keypair) return;
-  if (pending >= CONFIG.MAX_PENDING) return;
-  if (rebalancing) return; // pause arb during rebalance
-  if (Date.now() - lastArbAt < CONFIG.ARB_COOLDOWN_MS) return;
-
-  pending++;
-  try {
-    const opp = await checkArbOpportunity();
-    if (!opp) { process.stdout.write("."); return; }
-    lastArbAt = Date.now();
-    await executeArb(opp, keypair);
-    await refreshBalance();
-  } catch (err) {
-    console.error("[bot] arb error:", err);
-  } finally {
-    pending = Math.max(0, pending - 1);
   }
 }
 
@@ -90,8 +63,6 @@ export function startBot() {
   store.setBotState({ running: true, startedAt: Date.now(), error: null });
   console.log("[bot] started —", keypair.publicKey.toBase58());
 
-  watcher = startWatcher(() => tryArb().catch(console.error));
-  pollTimer = setInterval(() => tryArb().catch(console.error), 20_000);
   balanceTimer = setInterval(async () => {
     await refreshBalance();
     await refreshBasket();
@@ -107,13 +78,10 @@ export function startBot() {
 export function stopBot() {
   if (!store.botState.running) return;
 
-  watcher?.stop();
-  watcher = null;
-
-  for (const t of [pollTimer, balanceTimer, rebalanceTimer]) {
+  for (const t of [balanceTimer, rebalanceTimer]) {
     if (t) clearInterval(t);
   }
-  pollTimer = balanceTimer = rebalanceTimer = null;
+  balanceTimer = rebalanceTimer = null;
 
   rebalancing = false;
   connection = null;
@@ -123,19 +91,10 @@ export function stopBot() {
   console.log("[bot] stopped");
 }
 
-/** Resubscribe the websocket watcher — needed after TOKEN_MINT changes. */
-export function restartWatcher(): void {
-  if (!store.botState.running) return;
-  watcher?.stop();
-  watcher = startWatcher(() => tryArb().catch(console.error));
-  console.log("[bot] watcher restarted for new token mint");
-}
-
 /** Force rebalance from API — skips needsRebalance() check. */
 export async function forceRebalance(): Promise<void> {
   if (!connection || !keypair) throw new Error("Bot not running — start the bot first");
   if (rebalancing) throw new Error("Rebalance already in progress");
-  if (pending > 0) throw new Error("Arb in flight — retry in a few seconds");
 
   rebalancing = true;
   console.log("[bot] force rebalancing basket…");

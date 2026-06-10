@@ -28,7 +28,7 @@ app.get("*", (_req, res) => res.sendFile(path.join(clientDist, "index.html")));
 
 app.listen(CONFIG.PORT, () => {
   console.log("┌─────────────────────────────────────┐");
-  console.log(`│  ARB AGENT running                  │`);
+  console.log(`│  BASKET MANAGER running             │`);
   console.log(`│  http://localhost:${CONFIG.PORT}            │`);
   console.log("└─────────────────────────────────────┘");
 });

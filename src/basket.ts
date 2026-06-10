@@ -77,7 +77,7 @@ function computeEffectiveWeights(
 // Instead, quote rawTokenAmount TOKEN → WSOL to get actual SOL value.
 
 async function fetchValueSol(mint: string, rawAmount: string): Promise<number> {
-  // Always use lite API for pricing — keeps paid arb quota free
+  // Always use the Jupiter lite API for pricing
   const params = new URLSearchParams({
     inputMint: mint,
     outputMint: WSOL,
@@ -340,7 +340,7 @@ export async function executeRebalance(
       // Stagger rebalance swaps — not latency-sensitive
       await new Promise((r) => setTimeout(r, 1000));
 
-      // Use lite API + higher slippage for rebalance (preserves arb quota, tolerates slippage)
+      // Use lite API + higher slippage for rebalance (not latency-sensitive, just needs to fill)
       const params = new URLSearchParams({
         inputMint: swap.inputMint,
         outputMint: swap.outputMint,

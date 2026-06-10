@@ -8,6 +8,12 @@ export function walletExists(): boolean {
   return fs.existsSync(CONFIG.WALLET_KEYPAIR_PATH!);
 }
 
+/** Load the signing keypair from disk. Throws if missing/invalid. */
+export function loadKeypair(): Keypair {
+  const raw = JSON.parse(fs.readFileSync(CONFIG.WALLET_KEYPAIR_PATH!, "utf-8"));
+  return Keypair.fromSecretKey(Uint8Array.from(raw));
+}
+
 export function getWalletPublicKey(): string | null {
   if (!walletExists()) return null;
   try {

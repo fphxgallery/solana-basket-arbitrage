@@ -92,15 +92,6 @@ function TradeStatusBadge({ status }: { status: TradeRecord["status"] }) {
   );
 }
 
-interface SpreadResult {
-  profitBps: number;       // net of execution costs
-  grossProfitBps?: number;
-  routeLabels: string[];
-  dexLabels: string[];
-  inputSol: number;
-  outputSol: number;
-}
-
 type WalletModal =
   | { type: "import" }
   | { type: "confirm"; action: "create" | "import"; secretKey?: string }
@@ -224,18 +215,11 @@ export default function App() {
 function Dashboard() {
   const [state, setState] = useState<AppState | null>(null);
   const [connected, setConnected] = useState(false);
-  const [arbAmountInput, setArbAmountInput] = useState("");
-  const [minProfitInput, setMinProfitInput] = useState("");
-  const [tokenMintInput, setTokenMintInput] = useState("");
-  const [configSaving, setConfigSaving] = useState(false);
-  const [configError, setConfigError] = useState<string | null>(null);
   const [walletPublicKey, setWalletPublicKey] = useState<string | null>(null);
   const [walletModal, setWalletModal] = useState<WalletModal>(null);
   const [importKeyInput, setImportKeyInput] = useState("");
   const [walletError, setWalletError] = useState<string | null>(null);
   const [walletWorking, setWalletWorking] = useState(false);
-  const [spread, setSpread] = useState<SpreadResult | null>(null);
-  const [spreadUpdatedAt, setSpreadUpdatedAt] = useState<number | null>(null);
   const [basket, setBasket] = useState<BasketState | null>(null);
   const [rightTab, setRightTab] = useState<"trades" | "basket">("trades");
   const [basketEditorOpen, setBasketEditorOpen] = useState(false);
@@ -353,7 +337,7 @@ function Dashboard() {
     }
   }
 
-  async function saveBasketSettings(patch: { driftThresholdPct?: number; rebalanceIntervalHours?: number; arbSizingPct?: number }) {
+  async function saveBasketSettings(patch: { driftThresholdPct?: number; rebalanceIntervalHours?: number }) {
     await fetch("/api/basket/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -379,19 +363,6 @@ function Dashboard() {
       setTimeout(() => setRebalanceMsg(null), 5000);
     }
   }
-
-  // Spread polling
-  useEffect(() => {
-    function fetchSpread() {
-      fetch("/api/spread")
-        .then((r) => r.ok ? r.json() as Promise<SpreadResult> : Promise.reject())
-        .then((d) => { setSpread(d); setSpreadUpdatedAt(Date.now()); })
-        .catch(() => {});
-    }
-    fetchSpread();
-    const t = setInterval(fetchSpread, 20_000);
-    return () => clearInterval(t);
-  }, []);
 
   // Fetch wallet on load
   useEffect(() => {
@@ -474,11 +445,7 @@ function Dashboard() {
         }
 
         if (type === "snapshot") {
-          const snap = data as AppState;
-          setState(snap);
-          setArbAmountInput(String(snap.config?.arbAmountSol ?? "0.1"));
-          setMinProfitInput(String(snap.config?.minProfitBps ?? "500"));
-          setTokenMintInput(snap.config?.tokenMint ?? "");
+          setState(data as AppState);
           return;
         }
 
@@ -517,34 +484,6 @@ function Dashboard() {
     if (!state) return;
     const action = state.botState.running ? "stop" : "start";
     await fetch(`/api/${action}`, { method: "POST" });
-  }
-
-  async function saveConfig() {
-    setConfigSaving(true);
-    setConfigError(null);
-    try {
-      const res = await fetch("/api/config", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          arbAmountSol: parseFloat(arbAmountInput),
-          minProfitBps: parseInt(minProfitInput),
-          tokenMint: tokenMintInput.trim(),
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json() as { error?: string };
-        setConfigError(err.error ?? "Save failed");
-        return;
-      }
-      const updated = await res.json() as { arbAmountSol: number; minProfitBps: number; tokenMint: string };
-      setState((prev) =>
-        prev ? { ...prev, config: { ...prev.config, ...updated } } : prev,
-      );
-      setTokenMintInput(updated.tokenMint);
-    } finally {
-      setConfigSaving(false);
-    }
   }
 
   const uptime = state?.botState.startedAt
@@ -666,8 +605,7 @@ function Dashboard() {
       <header className="border-b border-gray-800 px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Zap className="w-5 h-5 text-violet-400" />
-          <span className="text-sm font-semibold tracking-wide text-white">ARB AGENT</span>
-          <span className="text-xs text-gray-500">{state?.config?.tokenMint ? truncate(state.config.tokenMint, 6) : "…"}</span>
+          <span className="text-sm font-semibold tracking-wide text-white">BASKET MANAGER</span>
         </div>
         <div className="flex items-center gap-3">
           {!connected && (
@@ -753,67 +691,12 @@ function Dashboard() {
             </div>
           </div>
 
-          {/* Live spread */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-gray-400 text-xs mb-3">
-              <ArrowRightLeft className="w-3.5 h-3.5" />
-              LIVE SPREAD
-              {spreadUpdatedAt && (
-                <span className="ml-auto text-gray-600">{formatTime(spreadUpdatedAt)}</span>
-              )}
-            </div>
-            {spread ? (() => {
-              const pct = spread.profitBps / 100;
-              const aboveThreshold = state && spread.profitBps >= state.config?.minProfitBps;
-              const color = aboveThreshold
-                ? "text-emerald-400"
-                : spread.profitBps > 0
-                ? "text-yellow-400"
-                : "text-red-400";
-              return (
-                <>
-                  <div className={`text-2xl font-bold mb-2 ${color}`}>
-                    {pct >= 0 ? "+" : ""}{pct.toFixed(2)}%
-                    <span className="ml-1.5 text-xs font-normal text-gray-500">net</span>
-                    {aboveThreshold && (
-                      <span className="ml-2 text-xs font-normal px-1.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400">above target</span>
-                    )}
-                  </div>
-                  {spread.grossProfitBps != null && (
-                    <div className="text-xs text-gray-600 mb-1">
-                      gross {spread.grossProfitBps >= 0 ? "+" : ""}{(spread.grossProfitBps / 100).toFixed(2)}%
-                    </div>
-                  )}
-                  <div className="text-xs text-gray-400 mb-0.5">
-                    {spread.routeLabels.join(" → ")}
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    {spread.dexLabels.join(" → ")}
-                  </div>
-                  <div className="mt-1 text-xs text-gray-600">
-                    {spread.inputSol.toFixed(3)} → {spread.outputSol.toFixed(3)} SOL
-                  </div>
-                </>
-              );
-            })() : (
-              <div className="text-gray-600 text-sm">Fetching…</div>
-            )}
-          </div>
-
           {/* P&L */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
             <div className="flex items-center gap-2 text-gray-400 text-xs mb-3">
               <TrendingUp className="w-3.5 h-3.5" />
               P&L
             </div>
-            <div className="text-xs text-gray-500 mb-1">ARB</div>
-            <div className={`text-xl font-bold ${(state?.totalProfitSol ?? 0) >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-              {state ? `+${formatSol(state.totalProfitSol)} SOL` : "—"}
-            </div>
-            <div className="text-xs text-gray-500 mt-0.5 mb-3">
-              {state?.totalTrades ?? 0} confirmed trades
-            </div>
-            <div className="text-xs text-gray-500 mb-1">BASKET</div>
             {basket?.pnlUsd != null ? (
               <>
                 <div className={`text-xl font-bold ${basket.pnlUsd >= 0 ? "text-emerald-400" : "text-red-400"}`}>
@@ -933,60 +816,6 @@ function Dashboard() {
             )}
           </div>
 
-          {/* Config */}
-          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-gray-400 text-xs mb-3">
-              <CircleDollarSign className="w-3.5 h-3.5" />
-              CONFIG
-            </div>
-            <div className="space-y-3">
-              {/* Only show static arb amount when no basket is configured — basket uses % of portfolio instead */}
-              {!basket?.config.tokens.length && (
-                <label className="block">
-                  <span className="text-xs text-gray-500 block mb-1">Arb amount (SOL)</span>
-                  <input
-                    type="number"
-                    step="0.01"
-                    min="0.01"
-                    value={arbAmountInput}
-                    onChange={(e) => setArbAmountInput(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-500"
-                  />
-                </label>
-              )}
-              <label className="block">
-                <span className="text-xs text-gray-500 block mb-1">Arb token mint</span>
-                <input
-                  type="text"
-                  spellCheck={false}
-                  value={tokenMintInput}
-                  onChange={(e) => setTokenMintInput(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white font-mono focus:outline-none focus:border-violet-500"
-                />
-              </label>
-              <label className="block">
-                <span className="text-xs text-gray-500 block mb-1">Min profit (bps, 500=5%)</span>
-                <input
-                  type="number"
-                  step="10"
-                  min="0"
-                  value={minProfitInput}
-                  onChange={(e) => setMinProfitInput(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:border-violet-500"
-                />
-              </label>
-              <button
-                onClick={saveConfig}
-                disabled={configSaving}
-                className="w-full py-2 rounded-lg bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 border border-violet-500/20 text-sm font-medium transition-colors disabled:opacity-50"
-              >
-                {configSaving ? "Saving…" : "Apply"}
-              </button>
-              {configError && (
-                <p className="text-xs text-red-400">{configError}</p>
-              )}
-            </div>
-          </div>
         </div>
 
         {/* Right column — tabbed */}
@@ -998,7 +827,7 @@ function Dashboard() {
                 onClick={() => setRightTab("trades")}
                 className={`flex items-center gap-1.5 text-xs py-3 mr-4 border-b-2 transition-colors ${rightTab === "trades" ? "border-violet-500 text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}
               >
-                <ArrowRightLeft className="w-3.5 h-3.5" /> TRADE LOG
+                <ArrowRightLeft className="w-3.5 h-3.5" /> REBALANCE LOG
                 <span className="text-gray-600 ml-1">{state?.trades.length ?? 0}</span>
               </button>
               <button
@@ -1015,7 +844,7 @@ function Dashboard() {
               <>
                 {!state || state.trades.length === 0 ? (
                   <div className="px-4 py-12 text-center text-gray-600 text-sm">
-                    No trades yet — start the bot to begin scanning
+                    No rebalances yet — start the bot to track and rebalance the basket
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-800/60">
@@ -1024,28 +853,13 @@ function Dashboard() {
                         <div className="flex items-center justify-between mb-1">
                           <div className="flex items-center gap-2">
                             <TradeStatusBadge status={t.status} />
-                            <span className={`text-sm font-semibold ${t.profitSol >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                              +{formatSol(t.profitSol)} SOL
-                            </span>
-                            <span className="text-xs text-gray-500">({(t.profitBps / 100).toFixed(2)}%)</span>
+                            <span className="text-sm text-gray-300">{t.route}</span>
                           </div>
                           <span className="text-xs text-gray-600">{formatTime(t.timestamp)}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs text-gray-500 flex-wrap">
-                          <span className="text-gray-400">{t.route}</span>
-                          <span className="text-gray-700">·</span>
-                          <span>{t.dexLabels.join(" → ")}</span>
-                          <span className="ml-auto text-gray-600 shrink-0">
-                            {t.inputSol.toFixed(3)} → {t.outputSol.toFixed(3)} SOL
-                          </span>
-                        </div>
-                        {t.bundleId && (
-                          <div className="mt-0.5 text-xs text-gray-700">
-                            bundle:{" "}
-                            <a href={`${SOLSCAN_TX}${t.bundleId}`} target="_blank" rel="noopener noreferrer"
-                              className="text-violet-500/60 hover:text-violet-400 transition-colors">
-                              {truncate(t.bundleId, 6)}
-                            </a>
+                        {t.inputSol > 0 && (
+                          <div className="text-xs text-gray-600">
+                            {t.inputSol.toFixed(4)} SOL value swapped
                           </div>
                         )}
                       </div>
@@ -1179,7 +993,7 @@ function Dashboard() {
                   <div className="text-xs text-gray-400 mb-3 flex items-center gap-1.5">
                     <CircleDollarSign className="w-3.5 h-3.5" /> BASKET SETTINGS
                   </div>
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <label className="block">
                       <span className="text-xs text-gray-600 block mb-1">Drift threshold (%)</span>
                       <input type="number" min="1" max="50" step="0.5"
@@ -1193,14 +1007,6 @@ function Dashboard() {
                       <input type="number" min="1" max="168" step="1"
                         defaultValue={basket?.config.rebalanceIntervalHours ?? 24}
                         onBlur={(e) => saveBasketSettings({ rebalanceIntervalHours: parseFloat(e.target.value) })}
-                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
-                      />
-                    </label>
-                    <label className="block">
-                      <span className="text-xs text-gray-600 block mb-1">Arb sizing (% of portfolio)</span>
-                      <input type="number" min="1" max="100" step="1"
-                        defaultValue={basket?.config.arbSizingPct ?? 10}
-                        onBlur={(e) => saveBasketSettings({ arbSizingPct: parseFloat(e.target.value) })}
                         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
                       />
                     </label>

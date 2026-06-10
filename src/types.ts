@@ -27,21 +27,3 @@ export interface RoutePlan {
   percent: number;
 }
 
-export interface ArbOpportunity {
-  quotes: JupiterQuote[];       // one per leg
-  route: string[];              // mint addresses [WSOL, TOKEN, ..., WSOL]
-  routeLabels: string[];        // human-readable ["SOL", "TOKEN", ..., "SOL"]
-  dexLabels: string[];          // DEX used per leg ["Raydium", "Meteora", ...]
-  inputLamports: bigint;
-  outputLamports: bigint;
-  profitLamports: bigint;      // net of execution costs (tip + base + priority fees)
-  profitBps: number;           // net
-  grossProfitBps: number;      // raw quote spread
-  costLamports: bigint;        // estimated execution cost
-}
-
-export interface SwapResponse {
-  swapTransaction: string;
-  lastValidBlockHeight: number;
-  prioritizationFeeLamports: number;
-}
