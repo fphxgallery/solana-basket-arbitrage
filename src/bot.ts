@@ -5,6 +5,7 @@ import { store } from "./store.js";
 import { basketStore } from "./basket-store.js";
 import { refreshHoldings, needsRebalance, executeRebalance } from "./basket.js";
 import { recordSnapshot } from "./value-history.js";
+import { notify } from "./telegram.js";
 
 let balanceTimer: NodeJS.Timeout | null = null;
 let rebalanceTimer: NodeJS.Timeout | null = null;
@@ -53,6 +54,7 @@ export function startBot() {
 
   store.setBotState({ running: true, startedAt: Date.now(), error: null });
   console.log("[bot] started —", keypair.publicKey.toBase58());
+  notify("🤖 Basket Manager started").catch(() => {});
 
   balanceTimer = setInterval(() => refreshBasket().catch(console.error), 3 * 60_000); // 3 min
 
@@ -76,6 +78,7 @@ export function stopBot() {
 
   store.setBotState({ running: false, startedAt: null, error: null });
   console.log("[bot] stopped");
+  notify("🛑 Basket Manager stopped").catch(() => {});
 }
 
 /** Force rebalance from API — skips needsRebalance() check. */

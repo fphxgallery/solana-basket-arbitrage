@@ -4,6 +4,7 @@ import { CONFIG } from "./config.js";
 import { basketStore, type TokenHolding } from "./basket-store.js";
 import { store } from "./store.js";
 import { getSolUsd } from "./value-history.js";
+import { notify } from "./telegram.js";
 import type { JupiterQuote } from "./types.js";
 
 const WSOL = CONFIG.WSOL_MINT;
@@ -316,11 +317,14 @@ export async function executeRebalance(
 
   console.log(`[basket] rebalancing ${swaps.length} positions`);
 
+  const results: Array<{ label: string; sol: number; status: "confirmed" | "failed" }> = [];
+
   for (const swap of swaps) {
     const inputSymbol = basketStore.config.tokens.find((t) => t.mint === swap.inputMint)?.symbol
       ?? (swap.inputMint === WSOL ? "SOL" : swap.inputMint.slice(0, 4));
     const outputSymbol = basketStore.config.tokens.find((t) => t.mint === swap.outputMint)?.symbol
       ?? (swap.outputMint === WSOL ? "SOL" : swap.outputMint.slice(0, 4));
+    const swapLabel = `${inputSymbol} → ${outputSymbol}`;
 
     const tradeId = randomUUID();
     const tradeRecord = {
@@ -328,7 +332,7 @@ export async function executeRebalance(
       timestamp: Date.now(),
       profitSol: 0,
       profitBps: 0,
-      route: `REBALANCE: ${inputSymbol} → ${outputSymbol}`,
+      route: `REBALANCE: ${swapLabel}`,
       dexLabels: [] as string[],
       bundleId: "",
       status: "pending" as const,
@@ -362,6 +366,7 @@ export async function executeRebalance(
       if (!qRes || !qRes.ok) {
         console.error("[basket] quote failed:", qRes ? await qRes.text() : "no response");
         store.updateTradeStatus(tradeId, "failed");
+        results.push({ label: swapLabel, sol: swap.displaySol, status: "failed" });
         continue;
       }
 
@@ -392,6 +397,7 @@ export async function executeRebalance(
         const errText = swapHttpRes ? await swapHttpRes.text() : "no response";
         console.error("[basket] swap tx failed:", errText);
         store.updateTradeStatus(tradeId, "failed");
+        results.push({ label: swapLabel, sol: swap.displaySol, status: "failed" });
         continue;
       }
 
@@ -421,21 +427,34 @@ export async function executeRebalance(
         if (result.value.err) {
           console.error(`[basket] swap failed on-chain: ${JSON.stringify(result.value.err)}`);
           store.updateTradeStatus(tradeId, "failed");
+          results.push({ label: swapLabel, sol: swap.displaySol, status: "failed" });
         } else {
           console.log(`[basket] swap confirmed: ${sig}`);
           store.updateTradeStatus(tradeId, "confirmed");
+          results.push({ label: swapLabel, sol: swap.displaySol, status: "confirmed" });
         }
       } catch (confirmErr) {
         console.warn(`[basket] confirmation timeout for ${sig}:`, confirmErr);
         store.updateTradeStatus(tradeId, "failed");
+        results.push({ label: swapLabel, sol: swap.displaySol, status: "failed" });
       }
     } catch (e) {
       console.error("[basket] swap failed:", e);
       store.updateTradeStatus(tradeId, "failed");
+      results.push({ label: swapLabel, sol: swap.displaySol, status: "failed" });
     }
   }
 
   basketStore.recordRebalance();
+
+  if (results.length > 0) {
+    const anyFailed = results.some((r) => r.status === "failed");
+    const icon = anyFailed ? "⚠️" : "⚖️";
+    const lines = results.map((r) =>
+      `${r.status === "confirmed" ? "✅" : "❌"} ${r.label} — ${r.sol.toFixed(4)} SOL`,
+    );
+    notify(`${icon} <b>Rebalance complete</b>\n${lines.join("\n")}`).catch(() => {});
+  }
 }
 
 // ── Token metadata lookup ─────────────────────────────────────────────────────

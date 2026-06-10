@@ -6,6 +6,7 @@ import { walletExists, getWalletPublicKey, createWallet, importWallet } from "./
 import { basketStore, type BasketToken } from "./basket-store.js";
 import { lookupTokenSymbol } from "./basket.js";
 import { valueHistory, getSolUsd } from "./value-history.js";
+import { getTelegramStatus, setTelegramConfig, clearTelegramConfig, notify } from "./telegram.js";
 
 export const router = Router();
 
@@ -158,6 +159,36 @@ router.post("/basket/rebalance", async (_req: Request, res: Response) => {
     const msg = e instanceof Error ? e.message : String(e);
     res.status(400).json({ error: msg });
   }
+});
+
+// ── Telegram ──────────────────────────────────────────────────────────────────
+
+router.get("/telegram", (_req: Request, res: Response) => {
+  res.json(getTelegramStatus());
+});
+
+router.post("/telegram", (req: Request, res: Response) => {
+  const { token, chatId } = req.body as { token?: string; chatId?: string };
+  if (!token?.trim() || !chatId?.trim()) {
+    res.status(400).json({ error: "token and chatId required" });
+    return;
+  }
+  setTelegramConfig(token.trim(), chatId.trim());
+  res.json({ ok: true, ...getTelegramStatus() });
+});
+
+router.delete("/telegram", (_req: Request, res: Response) => {
+  clearTelegramConfig();
+  res.json({ ok: true });
+});
+
+router.post("/telegram/test", async (_req: Request, res: Response) => {
+  if (!getTelegramStatus().configured) {
+    res.status(400).json({ error: "not configured" });
+    return;
+  }
+  await notify("🔔 Test message from Basket Manager");
+  res.json({ ok: true });
 });
 
 // ── Wallet ────────────────────────────────────────────────────────────────────

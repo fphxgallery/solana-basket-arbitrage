@@ -13,6 +13,7 @@ import {
   Layers,
   RefreshCw,
   Plus,
+  Send,
   Square,
   TrendingUp,
   Wallet,
@@ -235,6 +236,12 @@ function Dashboard() {
   const [rebalanceMsg, setRebalanceMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [valueHistory, setValueHistory] = useState<ValuePoint[]>([]);
   const [solUsd, setSolUsd] = useState<number>(0);
+  const [telegram, setTelegram] = useState<{ configured: boolean; chatId?: string } | null>(null);
+  const [telegramToken, setTelegramToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
+  const [telegramError, setTelegramError] = useState<string | null>(null);
+  const [telegramTesting, setTelegramTesting] = useState(false);
+  const [telegramTestMsg, setTelegramTestMsg] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
 
   // Basket fetch on load
@@ -257,6 +264,55 @@ function Dashboard() {
     const t = setInterval(fetchHistory, 3 * 60_000);
     return () => clearInterval(t);
   }, []);
+
+  // Telegram
+  useEffect(() => {
+    fetch("/api/telegram")
+      .then((r) => r.json() as Promise<{ configured: boolean; chatId?: string }>)
+      .then(setTelegram)
+      .catch(() => {});
+  }, []);
+
+  async function saveTelegram() {
+    setTelegramError(null);
+    if (!telegramToken.trim() || !telegramChatId.trim()) {
+      setTelegramError("Both fields required");
+      return;
+    }
+    const r = await fetch("/api/telegram", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: telegramToken.trim(), chatId: telegramChatId.trim() }),
+    });
+    if (r.ok) {
+      const d = await r.json() as { configured: boolean; chatId?: string };
+      setTelegram(d);
+      setTelegramToken("");
+      setTelegramChatId("");
+    } else {
+      const d = await r.json() as { error?: string };
+      setTelegramError(d.error ?? "Save failed");
+    }
+  }
+
+  async function disconnectTelegram() {
+    await fetch("/api/telegram", { method: "DELETE" });
+    setTelegram({ configured: false });
+  }
+
+  async function testTelegram() {
+    setTelegramTesting(true);
+    setTelegramTestMsg(null);
+    try {
+      const r = await fetch("/api/telegram/test", { method: "POST" });
+      setTelegramTestMsg(r.ok ? "Sent!" : "Failed — check token/chat ID");
+    } catch {
+      setTelegramTestMsg("Failed");
+    } finally {
+      setTelegramTesting(false);
+      setTimeout(() => setTelegramTestMsg(null), 3000);
+    }
+  }
 
   // Basket helpers
   const totalConfiguredWeight = basket?.config.tokens.reduce((s, t) => s + t.targetWeight, 0) ?? 0;
@@ -813,6 +869,60 @@ function Dashboard() {
             )}
             {walletError && (
               <p className="mt-2 text-xs text-red-400">{walletError}</p>
+            )}
+          </div>
+
+          {/* Telegram */}
+          <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+            <div className="flex items-center gap-2 text-gray-400 text-xs mb-3">
+              <Send className="w-3.5 h-3.5" />
+              TELEGRAM
+            </div>
+            {telegram?.configured ? (
+              <>
+                <div className="text-xs text-emerald-400 mb-1">Connected</div>
+                <div className="text-xs text-gray-500 mb-3 font-mono">Chat ID: {telegram.chatId}</div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={testTelegram}
+                    disabled={telegramTesting}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-white border border-gray-700 transition-colors disabled:opacity-50"
+                  >
+                    {telegramTesting ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Send className="w-3 h-3" />}
+                    {telegramTestMsg ?? "Test"}
+                  </button>
+                  <button
+                    onClick={disconnectTelegram}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs bg-gray-800 text-gray-400 hover:bg-red-900/40 hover:text-red-400 border border-gray-700 transition-colors"
+                  >
+                    <X className="w-3 h-3" /> Disconnect
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <input
+                  type="password"
+                  placeholder="Bot token"
+                  value={telegramToken}
+                  onChange={(e) => setTelegramToken(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-violet-500 mb-2"
+                />
+                <input
+                  type="text"
+                  placeholder="Chat ID"
+                  value={telegramChatId}
+                  onChange={(e) => setTelegramChatId(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-violet-500 mb-2"
+                />
+                {telegramError && <p className="text-xs text-red-400 mb-2">{telegramError}</p>}
+                <button
+                  onClick={saveTelegram}
+                  className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 border border-violet-500/20 transition-colors"
+                >
+                  <Check className="w-3 h-3" /> Connect
+                </button>
+              </>
             )}
           </div>
 
