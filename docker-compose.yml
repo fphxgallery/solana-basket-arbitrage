@@ -1,0 +1,24 @@
+volumes:
+  wallet:
+  data:
+
+services:
+  arb-agent:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "3420:3420"
+    volumes:
+      # Mount your keypair directory (read-only)
+      - ${WALLET_DIR:-wallet}:/app/wallet
+      - data:/app/data
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - WALLET_KEYPAIR_PATH=/app/wallet/keypair.json
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"

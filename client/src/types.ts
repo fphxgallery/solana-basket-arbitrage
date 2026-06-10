@@ -1,0 +1,73 @@
+export interface TradeRecord {
+  id: string;
+  timestamp: number;
+  profitSol: number;
+  profitBps: number;
+  route: string;
+  dexLabels: string[];
+  bundleId: string;
+  status: "pending" | "confirmed" | "failed";
+  inputSol: number;
+  outputSol: number;
+}
+
+export interface BotState {
+  running: boolean;
+  startedAt: number | null;
+  error: string | null;
+}
+
+export interface BasketToken {
+  mint: string;
+  symbol: string;
+  targetWeight: number;
+}
+
+export interface TokenHolding {
+  mint: string;
+  symbol: string;
+  balance: number;
+  priceSol: number;
+  valueSol: number;
+  currentWeight: number;
+  targetWeight: number;
+  driftPct: number;
+}
+
+export interface BasketState {
+  config: {
+    tokens: BasketToken[];
+    driftThresholdPct: number;
+    rebalanceIntervalHours: number;
+    arbSizingPct: number;
+  };
+  holdings: TokenHolding[];
+  totalValueSol: number;
+  totalValueUsd: number;
+  lastRebalanceAt: number | null;
+  baselineValueSol: number | null;
+  baselineValueUsd: number | null;
+  baselineTimestamp: number | null;
+  pnlSol: number | null;
+  pnlPct: number | null;
+  pnlUsd: number | null;
+  pnlPctUsd: number | null;
+}
+
+export interface ValuePoint {
+  ts: number;
+  valueUsd: number;
+}
+
+export interface AppState {
+  botState: BotState;
+  trades: TradeRecord[];
+  totalProfitSol: number;
+  totalTrades: number;
+  walletBalanceSol: number | null;
+  config: {
+    arbAmountSol: number;
+    minProfitBps: number;
+    tokenMint: string;
+  };
+}

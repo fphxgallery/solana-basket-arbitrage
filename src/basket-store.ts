@@ -1,0 +1,167 @@
+import fs from "fs";
+import path from "path";
+import { EventEmitter } from "events";
+
+export interface BasketToken {
+  mint: string;
+  symbol: string;
+  targetWeight: number; // 0–100, all tokens must sum to 100
+}
+
+export interface BasketConfig {
+  tokens: BasketToken[];
+  driftThresholdPct: number;      // rebalance trigger per token, default 5
+  rebalanceIntervalHours: number; // forced rebalance cadence, default 24
+  arbSizingPct: number;           // % of total basket value per arb leg, default 10
+}
+
+export interface TokenHolding {
+  mint: string;
+  symbol: string;
+  balance: number;        // human units (e.g. 1.5 USDC)
+  rawAmount: string;      // on-chain atom string (e.g. "1500000" for USDC with 6 decimals)
+  priceSol: number;       // price per 1 token in SOL
+  valueSol: number;       // balance × priceSol
+  currentWeight: number;  // 0–100
+  targetWeight: number;   // 0–100
+  driftPct: number;       // currentWeight − targetWeight (signed)
+}
+
+const DATA_PATH = path.resolve(process.env.DATA_DIR ?? "./data", "basket.json");
+
+const DEFAULTS: BasketConfig = {
+  tokens: [],
+  driftThresholdPct: 1,
+  rebalanceIntervalHours: 24,
+  arbSizingPct: 10,
+};
+
+class BasketStore extends EventEmitter {
+  config: BasketConfig;
+  holdings: TokenHolding[] = [];
+  totalValueSol = 0;
+  totalValueUsd = 0;
+  lastRebalanceAt: number | null = null;
+  /** Last known price per token (mint → SOL). Persists across failed refreshes. */
+  priceCache: Record<string, number> = {};
+  /** Portfolio value when PnL tracking started. Null = not yet set. */
+  baselineValueSol: number | null = null;
+  baselineValueUsd: number | null = null;
+  baselineTimestamp: number | null = null;
+
+  get pnlSol(): number | null {
+    if (this.baselineValueSol == null || this.totalValueSol === 0) return null;
+    return this.totalValueSol - this.baselineValueSol;
+  }
+
+  get pnlPct(): number | null {
+    if (this.baselineValueSol == null || this.baselineValueSol === 0) return null;
+    return ((this.totalValueSol - this.baselineValueSol) / this.baselineValueSol) * 100;
+  }
+
+  get pnlUsd(): number | null {
+    if (this.baselineValueUsd == null || this.totalValueUsd === 0) return null;
+    return this.totalValueUsd - this.baselineValueUsd;
+  }
+
+  get pnlPctUsd(): number | null {
+    if (this.baselineValueUsd == null || this.baselineValueUsd === 0) return null;
+    return ((this.totalValueUsd - this.baselineValueUsd) / this.baselineValueUsd) * 100;
+  }
+
+  constructor() {
+    super();
+    this.config = this._load();
+  }
+
+  private _load(): BasketConfig {
+    try {
+      if (fs.existsSync(DATA_PATH)) {
+        const raw = JSON.parse(fs.readFileSync(DATA_PATH, "utf-8")) as BasketConfig & {
+          priceCache?: Record<string, number>;
+          totalValueUsd?: number;
+          baselineValueSol?: number;
+          baselineValueUsd?: number;
+          baselineTimestamp?: number;
+          lastRebalanceAt?: number;
+        };
+        if (raw.priceCache) this.priceCache = raw.priceCache;
+        if (raw.totalValueUsd) this.totalValueUsd = raw.totalValueUsd;
+        if (raw.baselineValueSol != null) this.baselineValueSol = raw.baselineValueSol;
+        if (raw.baselineValueUsd != null) this.baselineValueUsd = raw.baselineValueUsd;
+        if (raw.baselineTimestamp != null) this.baselineTimestamp = raw.baselineTimestamp;
+        if (raw.lastRebalanceAt != null) this.lastRebalanceAt = raw.lastRebalanceAt;
+        const { priceCache: _pc, totalValueUsd: _tvu, baselineValueSol: _bv, baselineValueUsd: _bvu, baselineTimestamp: _bt, lastRebalanceAt: _lr, ...config } = raw;
+        // Merge defaults — a basket.json missing a field (old version, hand edit)
+        // must not produce undefined settings (NaN arb sizing, dead drift checks)
+        return { ...DEFAULTS, ...config };
+      }
+    } catch { /* ignore, use defaults */ }
+    return { ...DEFAULTS };
+  }
+
+  private _save() {
+    try {
+      fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
+      fs.writeFileSync(DATA_PATH, JSON.stringify({
+        ...this.config,
+        priceCache: this.priceCache,
+        totalValueUsd: this.totalValueUsd,
+        baselineValueSol: this.baselineValueSol,
+        baselineValueUsd: this.baselineValueUsd,
+        baselineTimestamp: this.baselineTimestamp,
+        lastRebalanceAt: this.lastRebalanceAt,
+      }, null, 2));
+    } catch (e) {
+      console.error("[basket-store] save failed:", e);
+    }
+  }
+
+  setTokens(tokens: BasketToken[]) {
+    this.config.tokens = tokens;
+    this._save();
+    this.emit("changed");
+  }
+
+  updateSettings(patch: Partial<Omit<BasketConfig, "tokens">>) {
+    Object.assign(this.config, patch);
+    this._save();
+    this.emit("changed");
+  }
+
+  setHoldings(holdings: TokenHolding[], totalValueSol: number, totalValueUsd: number) {
+    this.holdings = holdings;
+    this.totalValueSol = totalValueSol;
+    if (totalValueUsd > 0) this.totalValueUsd = totalValueUsd; // keep last known on CoinGecko failure
+    this._save(); // persists priceCache + totalValueUsd so restart doesn't lose it
+    this.emit("holdings");
+  }
+
+  setBaseline(valueSol: number, valueUsd: number) {
+    this.baselineValueSol = valueSol;
+    this.baselineValueUsd = valueUsd;
+    this.baselineTimestamp = Date.now();
+    this._save();
+  }
+
+  /** Patch USD baseline only — used to migrate old basket.json that lacked baselineValueUsd. */
+  patchBaselineUsd(valueUsd: number) {
+    this.baselineValueUsd = valueUsd;
+    this._save();
+  }
+
+  resetBaseline() {
+    this.baselineValueSol = this.totalValueSol > 0 ? this.totalValueSol : null;
+    this.baselineValueUsd = this.totalValueUsd > 0 ? this.totalValueUsd : null;
+    this.baselineTimestamp = this.baselineValueSol != null ? Date.now() : null;
+    this._save();
+    this.emit("changed"); // push updated pnl (now 0%) to SSE clients immediately
+  }
+
+  recordRebalance() {
+    this.lastRebalanceAt = Date.now();
+    this._save(); // persist so interval-based rebalance survives restarts
+  }
+}
+
+export const basketStore = new BasketStore();

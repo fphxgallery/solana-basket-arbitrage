@@ -1,0 +1,25 @@
+[Unit]
+Description=Solana Arb Agent
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=marc
+WorkingDirectory=/home/marc/arb-agent
+EnvironmentFile=/home/marc/arb-agent/.env
+ExecStart=/usr/bin/node /home/marc/arb-agent/dist/index.js
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=arb-agent
+
+# Harden
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ReadWritePaths=/home/marc/arb-agent
+
+[Install]
+WantedBy=multi-user.target

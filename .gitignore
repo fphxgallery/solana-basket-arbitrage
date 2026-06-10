@@ -1,0 +1,21 @@
+# Environment / secrets
+.env
+.env.*
+
+# Wallet keypair — NEVER commit
+wallet/
+
+# Runtime data — server-local
+data/
+
+# Build output
+dist/
+client/dist/
+
+# Dependencies
+node_modules/
+client/node_modules/
+
+# Misc
+*.log
+.DS_Store
