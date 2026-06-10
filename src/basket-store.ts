@@ -14,6 +14,8 @@ export interface BasketConfig {
   rebalanceIntervalHours: number; // forced rebalance cadence, default 24
   hwmEnabled: boolean;            // high-water mark profit lock, default false
   hwmHalfLifeDays: number;        // HWM decay half-life in days, default 7
+  curvePoints: Array<[number, number]>; // [pnlPct, usdcWeightPct] pairs, ascending by pnlPct
+  curveCap: number;               // USDC weight when pnlPct > last curve point, default 30
 }
 
 export interface TokenHolding {
@@ -36,6 +38,8 @@ const DEFAULTS: BasketConfig = {
   rebalanceIntervalHours: 24,
   hwmEnabled: false,
   hwmHalfLifeDays: 7,
+  curvePoints: [[-20, 0], [-10, 5], [0, 10], [10, 15], [15, 20], [20, 25]],
+  curveCap: 30,
 };
 
 class BasketStore extends EventEmitter {

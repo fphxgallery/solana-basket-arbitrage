@@ -41,6 +41,8 @@ export interface BasketState {
     rebalanceIntervalHours: number;
     hwmEnabled: boolean;
     hwmHalfLifeDays: number;
+    curvePoints: Array<[number, number]>;
+    curveCap: number;
   };
   holdings: TokenHolding[];
   totalValueSol: number;

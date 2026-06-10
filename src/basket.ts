@@ -11,30 +11,20 @@ const WSOL = CONFIG.WSOL_MINT;
 
 // ── Dynamic USDC weight ───────────────────────────────────────────────────────
 
-/**
- * Linear interpolation curve mapping PnL% → target USDC weight%.
- * Above +20% PnL: hard cap at 30%. Below -20%: floor at 0%.
- */
 function dynamicUsdcWeight(pnlPct: number): number {
-  const points: [number, number][] = [
-    [-20,  0],
-    [-10,  5],
-    [  0, 10],
-    [ 10, 15],
-    [ 15, 20],
-    [ 20, 25],
-  ];
-  if (pnlPct > 20)  return 30;
-  if (pnlPct <= -20) return 0;
-  for (let i = 0; i < points.length - 1; i++) {
-    const [x0, y0] = points[i];
-    const [x1, y1] = points[i + 1];
+  const { curvePoints, curveCap } = basketStore.config;
+  if (!curvePoints.length) return 0;
+  if (pnlPct > curvePoints[curvePoints.length - 1][0]) return curveCap;
+  if (pnlPct <= curvePoints[0][0]) return curvePoints[0][1];
+  for (let i = 0; i < curvePoints.length - 1; i++) {
+    const [x0, y0] = curvePoints[i];
+    const [x1, y1] = curvePoints[i + 1];
     if (pnlPct <= x1) {
       const t = (pnlPct - x0) / (x1 - x0);
       return y0 + t * (y1 - y0);
     }
   }
-  return 25;
+  return curvePoints[curvePoints.length - 1][1];
 }
 
 /**

@@ -222,7 +222,7 @@ function Dashboard() {
   const [walletError, setWalletError] = useState<string | null>(null);
   const [walletWorking, setWalletWorking] = useState(false);
   const [basket, setBasket] = useState<BasketState | null>(null);
-  const [rightTab, setRightTab] = useState<"trades" | "basket">("trades");
+  const [rightTab, setRightTab] = useState<"trades" | "basket" | "dynamic">("trades");
   const [basketEditorOpen, setBasketEditorOpen] = useState(false);
   const [editorTokens, setEditorTokens] = useState<BasketToken[]>([]);
   const [editorMint, setEditorMint] = useState("");
@@ -232,6 +232,11 @@ function Dashboard() {
   const [editorLookupMsg, setEditorLookupMsg] = useState<string | null>(null);
   const [editorSaving, setEditorSaving] = useState(false);
   const [basketError, setBasketError] = useState<string | null>(null);
+  const [curveEditing, setCurveEditing] = useState<Array<[number, number]> | null>(null);
+  const [curveCapEditing, setCurveCapEditing] = useState(30);
+  const [curveSaving, setCurveSaving] = useState(false);
+  const [curveError, setCurveError] = useState<string | null>(null);
+  const curveInitRef = useRef(false);
   const [rebalancing, setRebalancing] = useState(false);
   const [rebalanceMsg, setRebalanceMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [valueHistory, setValueHistory] = useState<ValuePoint[]>([]);
@@ -272,6 +277,43 @@ function Dashboard() {
       .then(setTelegram)
       .catch(() => {});
   }, []);
+
+  // Initialize curve editor once when basket first loads
+  useEffect(() => {
+    if (!curveInitRef.current && basket?.config.curvePoints) {
+      setCurveEditing(basket.config.curvePoints.map((p) => [p[0], p[1]]));
+      setCurveCapEditing(basket.config.curveCap ?? 30);
+      curveInitRef.current = true;
+    }
+  }, [basket]);
+
+  async function saveCurve() {
+    if (!curveEditing) return;
+    setCurveError(null);
+    const sorted = [...curveEditing].sort((a, b) => a[0] - b[0]);
+    for (let i = 1; i < sorted.length; i++) {
+      if (sorted[i][0] === sorted[i - 1][0]) {
+        setCurveError("Duplicate PnL% values — each must be unique");
+        return;
+      }
+    }
+    if (sorted.length < 2) { setCurveError("Need at least 2 points"); return; }
+    setCurveSaving(true);
+    try {
+      const res = await fetch("/api/basket/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ curvePoints: sorted, curveCap: curveCapEditing }),
+      });
+      const d = await res.json() as { error?: string };
+      if (!res.ok) { setCurveError(d.error ?? "Save failed"); return; }
+      setCurveEditing(sorted);
+    } finally {
+      setCurveSaving(false);
+    }
+  }
+
+  const DEFAULT_CURVE: Array<[number, number]> = [[-20, 0], [-10, 5], [0, 10], [10, 15], [15, 20], [20, 25]];
 
   async function saveTelegram() {
     setTelegramError(null);
@@ -942,10 +984,16 @@ function Dashboard() {
               </button>
               <button
                 onClick={() => setRightTab("basket")}
-                className={`flex items-center gap-1.5 text-xs py-3 border-b-2 transition-colors ${rightTab === "basket" ? "border-violet-500 text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}
+                className={`flex items-center gap-1.5 text-xs py-3 mr-4 border-b-2 transition-colors ${rightTab === "basket" ? "border-violet-500 text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}
               >
                 <Layers className="w-3.5 h-3.5" /> BASKET
                 <span className="text-gray-600 ml-1">{basket?.config.tokens.length ?? 0}</span>
+              </button>
+              <button
+                onClick={() => setRightTab("dynamic")}
+                className={`flex items-center gap-1.5 text-xs py-3 border-b-2 transition-colors ${rightTab === "dynamic" ? "border-violet-500 text-white" : "border-transparent text-gray-500 hover:text-gray-300"}`}
+              >
+                <TrendingUp className="w-3.5 h-3.5" /> DYNAMIC WEIGHT
               </button>
             </div>
 
@@ -977,6 +1025,120 @@ function Dashboard() {
                   </div>
                 )}
               </>
+            )}
+
+            {/* Dynamic Weight tab */}
+            {rightTab === "dynamic" && (
+              <div className="p-4 space-y-5">
+                {/* HWM */}
+                <div>
+                  <div className="text-xs text-gray-400 mb-3 flex items-center gap-1.5">
+                    <TrendingUp className="w-3.5 h-3.5" /> HIGH-WATER MARK
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600">Profit lock enabled</span>
+                      <button
+                        onClick={() => saveBasketSettings({ hwmEnabled: !(basket?.config.hwmEnabled ?? false) })}
+                        className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${basket?.config.hwmEnabled ? "bg-violet-600" : "bg-gray-700"}`}
+                      >
+                        <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${basket?.config.hwmEnabled ? "left-[18px]" : "left-0.5"}`} />
+                      </button>
+                    </div>
+                    {basket?.config.hwmEnabled && (
+                      <label className="block">
+                        <span className="text-xs text-gray-600 block mb-1">Decay half-life (days)</span>
+                        <input type="number" min="1" max="90" step="1"
+                          key={basket.config.hwmHalfLifeDays}
+                          defaultValue={basket.config.hwmHalfLifeDays ?? 7}
+                          onBlur={(e) => saveBasketSettings({ hwmHalfLifeDays: parseFloat(e.target.value) })}
+                          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
+                        />
+                      </label>
+                    )}
+                  </div>
+                </div>
+
+                {/* Curve editor */}
+                <div className="border-t border-gray-800 pt-4">
+                  <div className="text-xs text-gray-400 mb-3 flex items-center gap-1.5">
+                    <BarChart3 className="w-3.5 h-3.5" /> PROFIT-TAKING CURVE
+                  </div>
+                  {curveEditing && (
+                    <>
+                      <table className="w-full text-xs mb-2">
+                        <thead>
+                          <tr className="text-gray-600 border-b border-gray-800">
+                            <th className="text-left pb-1.5 font-normal">PnL %</th>
+                            <th className="text-left pb-1.5 font-normal pl-2">USDC %</th>
+                            <th className="pb-1.5 w-6" />
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-800/40">
+                          {curveEditing.map((pt, i) => (
+                            <tr key={i}>
+                              <td className="py-1 pr-2">
+                                <input
+                                  type="number" step="1"
+                                  value={pt[0]}
+                                  onChange={(e) => setCurveEditing((prev) => prev!.map((p, j) => j === i ? [parseFloat(e.target.value) || 0, p[1]] : p))}
+                                  className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-white focus:outline-none focus:border-violet-500"
+                                />
+                              </td>
+                              <td className="py-1 pl-2 pr-2">
+                                <input
+                                  type="number" min="0" max="100" step="1"
+                                  value={pt[1]}
+                                  onChange={(e) => setCurveEditing((prev) => prev!.map((p, j) => j === i ? [p[0], parseFloat(e.target.value) || 0] : p))}
+                                  className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-0.5 text-white focus:outline-none focus:border-violet-500"
+                                />
+                              </td>
+                              <td className="py-1 text-right">
+                                <button
+                                  onClick={() => setCurveEditing((prev) => prev!.filter((_, j) => j !== i))}
+                                  className="text-gray-700 hover:text-red-400 transition-colors"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <button
+                        onClick={() => setCurveEditing((prev) => [...prev!, [0, 0]])}
+                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-violet-400 transition-colors mb-3"
+                      >
+                        <Plus className="w-3 h-3" /> Add point
+                      </button>
+                      <label className="block mb-3">
+                        <span className="text-xs text-gray-600 block mb-1">Cap above max PnL (%)</span>
+                        <input type="number" min="0" max="100" step="1"
+                          value={curveCapEditing}
+                          onChange={(e) => setCurveCapEditing(parseFloat(e.target.value) || 0)}
+                          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
+                        />
+                      </label>
+                      {curveError && <p className="text-xs text-red-400 mb-2">{curveError}</p>}
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => { setCurveEditing(DEFAULT_CURVE.map((p) => [p[0], p[1]])); setCurveCapEditing(30); setCurveError(null); }}
+                          className="flex-1 py-1.5 rounded-lg text-xs bg-gray-800 text-gray-400 hover:bg-gray-700 border border-gray-700 transition-colors"
+                        >
+                          Reset to defaults
+                        </button>
+                        <button
+                          onClick={saveCurve}
+                          disabled={curveSaving}
+                          className="flex-1 py-1.5 rounded-lg text-xs bg-violet-500/10 text-violet-400 hover:bg-violet-500/20 border border-violet-500/20 transition-colors disabled:opacity-50"
+                        >
+                          {curveSaving ? "Saving…" : "Save curve"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             )}
 
             {/* Basket tab */}
@@ -1103,7 +1265,7 @@ function Dashboard() {
                   <div className="text-xs text-gray-400 mb-3 flex items-center gap-1.5">
                     <CircleDollarSign className="w-3.5 h-3.5" /> BASKET SETTINGS
                   </div>
-                  <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <label className="block">
                       <span className="text-xs text-gray-600 block mb-1">Drift threshold (%)</span>
                       <input type="number" min="1" max="50" step="0.5"
@@ -1120,29 +1282,6 @@ function Dashboard() {
                         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
                       />
                     </label>
-                  </div>
-                  {/* HWM profit lock */}
-                  <div className="border-t border-gray-800/60 pt-3 space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-600">High-water mark profit lock</span>
-                      <button
-                        onClick={() => saveBasketSettings({ hwmEnabled: !(basket?.config.hwmEnabled ?? false) })}
-                        className={`relative w-8 h-4 rounded-full transition-colors flex-shrink-0 ${basket?.config.hwmEnabled ? "bg-violet-600" : "bg-gray-700"}`}
-                      >
-                        <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${basket?.config.hwmEnabled ? "left-[18px]" : "left-0.5"}`} />
-                      </button>
-                    </div>
-                    {basket?.config.hwmEnabled && (
-                      <label className="block">
-                        <span className="text-xs text-gray-600 block mb-1">Decay half-life (days)</span>
-                        <input type="number" min="1" max="90" step="1"
-                          key={basket.config.hwmHalfLifeDays}
-                          defaultValue={basket.config.hwmHalfLifeDays ?? 7}
-                          onBlur={(e) => saveBasketSettings({ hwmHalfLifeDays: parseFloat(e.target.value) })}
-                          className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
-                        />
-                      </label>
-                    )}
                   </div>
                 </div>
               </div>

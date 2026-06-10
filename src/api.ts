@@ -121,11 +121,13 @@ router.put("/basket/tokens", (req: Request, res: Response) => {
 
 // Update basket settings (drift threshold, rebalance interval)
 router.patch("/basket/settings", (req: Request, res: Response) => {
-  const { driftThresholdPct, rebalanceIntervalHours, hwmEnabled, hwmHalfLifeDays } = req.body as {
+  const { driftThresholdPct, rebalanceIntervalHours, hwmEnabled, hwmHalfLifeDays, curvePoints, curveCap } = req.body as {
     driftThresholdPct?: number;
     rebalanceIntervalHours?: number;
     hwmEnabled?: boolean;
     hwmHalfLifeDays?: number;
+    curvePoints?: Array<[number, number]>;
+    curveCap?: number;
   };
   const patch: Parameters<typeof basketStore.updateSettings>[0] = {};
   if (driftThresholdPct != null) {
@@ -155,6 +157,32 @@ router.patch("/basket/settings", (req: Request, res: Response) => {
       return;
     }
     patch.hwmHalfLifeDays = hwmHalfLifeDays;
+  }
+  if (curvePoints != null) {
+    if (!Array.isArray(curvePoints) || curvePoints.length < 2) {
+      res.status(400).json({ error: "curvePoints must be an array of at least 2 points" });
+      return;
+    }
+    for (const p of curvePoints) {
+      if (!Array.isArray(p) || p.length !== 2 || typeof p[0] !== "number" || typeof p[1] !== "number" || p[1] < 0 || p[1] > 100) {
+        res.status(400).json({ error: "each curve point must be [pnlPct, usdcPct] with usdcPct in [0, 100]" });
+        return;
+      }
+    }
+    for (let i = 1; i < curvePoints.length; i++) {
+      if (curvePoints[i][0] <= curvePoints[i - 1][0]) {
+        res.status(400).json({ error: "curve points must have strictly ascending PnL% values" });
+        return;
+      }
+    }
+    patch.curvePoints = curvePoints;
+  }
+  if (curveCap != null) {
+    if (typeof curveCap !== "number" || curveCap < 0 || curveCap > 100) {
+      res.status(400).json({ error: "curveCap must be a number in [0, 100]" });
+      return;
+    }
+    patch.curveCap = curveCap;
   }
   basketStore.updateSettings(patch);
   res.json(basketStore.config);
