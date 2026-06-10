@@ -109,13 +109,14 @@ export async function sendDailyReport(): Promise<void> {
   if (totalValueUsd > 0) {
     msg += `\n💼 Portfolio: <b>$${totalValueUsd.toFixed(2)}</b>`;
     if (totalValueSol > 0) msg += ` (${totalValueSol.toFixed(4)} SOL)`;
-    if (solUsd > 0) msg += ` · SOL = $${solUsd.toFixed(2)}`;
     msg += `\n`;
   }
+  if (solUsd > 0) msg += `💲 SOL = $${solUsd.toFixed(2)}\n`;
 
   if (pnlUsd != null && pnlPctUsd != null) {
-    const sign = pnlUsd >= 0 ? "+" : "";
-    msg += `📈 P&amp;L: <b>${sign}$${Math.abs(pnlUsd).toFixed(2)}</b> (${sign}${pnlPctUsd.toFixed(2)}%)`;
+    const sign = pnlUsd >= 0 ? "+" : "-";
+    const pctStr = pnlPctUsd >= 0 ? `+${pnlPctUsd.toFixed(2)}%` : `${pnlPctUsd.toFixed(2)}%`;
+    msg += `📈 P&amp;L: <b>${sign}$${Math.abs(pnlUsd).toFixed(2)}</b> (${pctStr})`;
     if (baselineTimestamp) {
       const since = new Date(baselineTimestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" });
       msg += ` since ${since}`;

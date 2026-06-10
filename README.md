@@ -120,6 +120,10 @@ sudo systemctl status basket-manager
 
 ## Changelog
 
+### v2.1.5
+- Fix daily report P&L sign: negative P&L now correctly shows `-$X.XX` instead of `$X.XX`
+- Move SOL price onto its own line in the daily report (was appended to the Portfolio line)
+
 ### v2.1.4
 - Fix TypeScript build error: `saveTelegram` and `disconnectTelegram` now include `reportEnabled`/`reportTime` in state updates to match the extended telegram state type added in v2.1.3
 
