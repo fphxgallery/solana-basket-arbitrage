@@ -66,7 +66,18 @@ export async function recordSnapshot(totalValueSol: number): Promise<void> {
   if (usd <= 0) return;
 
   const now = Date.now();
-  valueHistory.push({ ts: now, valueUsd: totalValueSol * usd });
+  const newValueUsd = totalValueSol * usd;
+
+  // Reject outliers: if value jumps >10x from the last point, it's a bad quote
+  if (valueHistory.length > 0) {
+    const last = valueHistory[valueHistory.length - 1].valueUsd;
+    if (last > 0 && (newValueUsd > last * 10 || newValueUsd < last / 10)) {
+      console.warn(`[value-history] rejecting outlier snapshot: $${newValueUsd.toFixed(2)} vs last $${last.toFixed(2)}`);
+      return;
+    }
+  }
+
+  valueHistory.push({ ts: now, valueUsd: newValueUsd });
 
   // Prune entries older than 30 days
   const cutoff = now - THIRTY_DAYS;

@@ -171,6 +171,9 @@ class BasketStore extends EventEmitter {
     this.baselineValueSol = this.totalValueSol > 0 ? this.totalValueSol : null;
     this.baselineValueUsd = this.totalValueUsd > 0 ? this.totalValueUsd : null;
     this.baselineTimestamp = this.baselineValueSol != null ? Date.now() : null;
+    // HWM is relative to baseline — reset it too so a poisoned HWM can't persist
+    this.hwmValueUsd = this.totalValueUsd > 0 ? this.totalValueUsd : null;
+    this.hwmCapturedAt = this.hwmValueUsd != null ? Date.now() : null;
     this._save();
     this.emit("changed"); // push updated pnl (now 0%) to SSE clients immediately
   }

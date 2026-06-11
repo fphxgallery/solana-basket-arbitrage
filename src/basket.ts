@@ -182,9 +182,18 @@ export async function refreshHoldings(
 
       const fetched = await fetchValueSol(t.mint, bal.rawAmount);
       if (fetched > 0) {
-        valueSol = fetched;
-        priceSol = fetched / bal.uiAmount;
-        basketStore.priceCache[t.mint] = priceSol; // update cache on success
+        const derivedPrice = fetched / bal.uiAmount;
+        const cached = basketStore.priceCache[t.mint];
+        // Reject if price deviates >10x from cached — guards against bad pool quotes
+        if (cached && (derivedPrice > cached * 10 || derivedPrice < cached / 10)) {
+          console.warn(`[basket] rejecting suspicious quote for ${t.symbol}: ${derivedPrice.toFixed(8)} SOL vs cached ${cached.toFixed(8)} SOL — using cache`);
+          priceSol = cached;
+          valueSol = bal.uiAmount * cached;
+        } else {
+          valueSol = fetched;
+          priceSol = derivedPrice;
+          basketStore.priceCache[t.mint] = priceSol;
+        }
       } else {
         // Fall back to cached price rather than showing 0
         const cached = basketStore.priceCache[t.mint];

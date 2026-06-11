@@ -120,6 +120,11 @@ sudo systemctl status basket-manager
 
 ## Changelog
 
+### v2.2.3
+- Fix: bad Jupiter quotes (thin-liquidity pool spikes) can no longer corrupt portfolio value, the high-water mark, or the chart — quotes where the derived price deviates >10× from the cached price are rejected and the cache is used instead
+- Fix: `resetBaseline` now also resets the HWM — a poisoned HWM from a bad quote could previously persist for days even after pressing the reset button
+- Fix: outlier snapshots (>10× or <0.1× the previous point) are now rejected before being written to `data/value-history.json`
+
 ### v2.2.2
 - Fix daily report not sending: `>=` comparison replaces strict equality so a 60s timer drift can't cause a missed minute; use local date instead of UTC so the date doesn't flip at midnight UTC in non-UTC timezones
 
@@ -175,7 +180,7 @@ sudo systemctl status basket-manager
 - Add high-water mark profit lock for dynamic USDC weight — USDC target weight locks in at portfolio peaks and releases gradually via configurable exponential decay (default 7-day half-life)
 - Configurable from dashboard: toggle + half-life input in Basket Settings panel
 - HWM state (`hwmValueUsd`, `hwmCapturedAt`) persisted in `data/basket.json`, survives restarts
-- Baseline reset does not affect HWM — profit lock persists through deposits
+- Baseline reset does not affect HWM — profit lock persists through deposits (changed in v2.2.3: reset now also clears HWM)
 
 ### v2.0.3
 - Add Telegram notifications — bot start/stop and rebalance summary (per-swap confirmed/failed)
