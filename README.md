@@ -120,6 +120,9 @@ sudo systemctl status basket-manager
 
 ## Changelog
 
+### v2.2.0
+- Basket settings fields (drift threshold, rebalance interval, min swap) now display on a single row
+
 ### v2.1.9
 - Add min-swap fee gate to `executeRebalance` — swaps worth less than the configured USD floor are skipped to prevent fee bleed on small drift corrections
 - New "Min swap ($)" setting in basket settings panel (default $5, configurable at runtime)

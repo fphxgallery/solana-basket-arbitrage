@@ -1403,7 +1403,7 @@ function Dashboard() {
                   <div className="text-xs text-gray-400 mb-3 flex items-center gap-1.5">
                     <CircleDollarSign className="w-3.5 h-3.5" /> BASKET SETTINGS
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <label className="block">
                       <span className="text-xs text-gray-600 block mb-1">Drift threshold (%)</span>
                       <input type="number" min="1" max="50" step="0.5"
