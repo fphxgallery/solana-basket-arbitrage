@@ -121,13 +121,14 @@ router.put("/basket/tokens", (req: Request, res: Response) => {
 
 // Update basket settings (drift threshold, rebalance interval)
 router.patch("/basket/settings", (req: Request, res: Response) => {
-  const { driftThresholdPct, rebalanceIntervalHours, hwmEnabled, hwmHalfLifeDays, curvePoints, curveCap } = req.body as {
+  const { driftThresholdPct, rebalanceIntervalHours, hwmEnabled, hwmHalfLifeDays, curvePoints, curveCap, minSwapUsd } = req.body as {
     driftThresholdPct?: number;
     rebalanceIntervalHours?: number;
     hwmEnabled?: boolean;
     hwmHalfLifeDays?: number;
     curvePoints?: Array<[number, number]>;
     curveCap?: number;
+    minSwapUsd?: number;
   };
   const patch: Parameters<typeof basketStore.updateSettings>[0] = {};
   if (driftThresholdPct != null) {
@@ -183,6 +184,13 @@ router.patch("/basket/settings", (req: Request, res: Response) => {
       return;
     }
     patch.curveCap = curveCap;
+  }
+  if (minSwapUsd != null) {
+    if (typeof minSwapUsd !== "number" || minSwapUsd < 0) {
+      res.status(400).json({ error: "minSwapUsd must be a non-negative number" });
+      return;
+    }
+    patch.minSwapUsd = minSwapUsd;
   }
   basketStore.updateSettings(patch);
   res.json(basketStore.config);

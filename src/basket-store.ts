@@ -16,6 +16,7 @@ export interface BasketConfig {
   hwmHalfLifeDays: number;        // HWM decay half-life in days, default 7
   curvePoints: Array<[number, number]>; // [pnlPct, usdcWeightPct] pairs, ascending by pnlPct
   curveCap: number;               // USDC weight when pnlPct > last curve point, default 30
+  minSwapUsd: number;             // skip rebalance swaps worth less than this in USD, default 5
 }
 
 export interface TokenHolding {
@@ -40,6 +41,7 @@ const DEFAULTS: BasketConfig = {
   hwmHalfLifeDays: 7,
   curvePoints: [[-20, 0], [-10, 5], [0, 10], [10, 15], [15, 20], [20, 25]],
   curveCap: 30,
+  minSwapUsd: 5,
 };
 
 class BasketStore extends EventEmitter {

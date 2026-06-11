@@ -472,7 +472,7 @@ function Dashboard() {
     }
   }
 
-  async function saveBasketSettings(patch: { driftThresholdPct?: number; rebalanceIntervalHours?: number; hwmEnabled?: boolean; hwmHalfLifeDays?: number }) {
+  async function saveBasketSettings(patch: { driftThresholdPct?: number; rebalanceIntervalHours?: number; hwmEnabled?: boolean; hwmHalfLifeDays?: number; minSwapUsd?: number }) {
     await fetch("/api/basket/settings", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -1417,6 +1417,14 @@ function Dashboard() {
                       <input type="number" min="1" max="168" step="1"
                         defaultValue={basket?.config.rebalanceIntervalHours ?? 24}
                         onBlur={(e) => saveBasketSettings({ rebalanceIntervalHours: parseFloat(e.target.value) })}
+                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="text-xs text-gray-600 block mb-1">Min swap ($)</span>
+                      <input type="number" min="0" max="100" step="1"
+                        defaultValue={basket?.config.minSwapUsd ?? 5}
+                        onBlur={(e) => saveBasketSettings({ minSwapUsd: parseFloat(e.target.value) })}
                         className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-white focus:outline-none focus:border-violet-500"
                       />
                     </label>

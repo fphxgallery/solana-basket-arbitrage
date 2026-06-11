@@ -325,17 +325,24 @@ export async function executeRebalance(
     swaps.push({ inputMint: WSOL, outputMint: h.mint, rawAmount, displaySol: buyAmount });
   }
 
-  if (!swaps.length) {
+  // Drop swaps below the min-swap floor — fee+slippage would eat the trade
+  const solUsd = await getSolUsd();
+  const { minSwapUsd } = basketStore.config;
+  const filteredSwaps = swaps.filter((s) => s.displaySol * solUsd >= minSwapUsd);
+  const skipped = swaps.length - filteredSwaps.length;
+  if (skipped > 0) console.log(`[basket] skipped ${skipped} swap(s) below $${minSwapUsd} min`);
+
+  if (!filteredSwaps.length) {
     console.log("[basket] no rebalance needed");
     basketStore.recordRebalance();
     return;
   }
 
-  console.log(`[basket] rebalancing ${swaps.length} positions`);
+  console.log(`[basket] rebalancing ${filteredSwaps.length} positions`);
 
   const results: Array<{ label: string; sol: number; status: "confirmed" | "failed" }> = [];
 
-  for (const swap of swaps) {
+  for (const swap of filteredSwaps) {
     const inputSymbol = basketStore.config.tokens.find((t) => t.mint === swap.inputMint)?.symbol
       ?? (swap.inputMint === WSOL ? "SOL" : swap.inputMint.slice(0, 4));
     const outputSymbol = basketStore.config.tokens.find((t) => t.mint === swap.outputMint)?.symbol

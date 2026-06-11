@@ -120,6 +120,10 @@ sudo systemctl status basket-manager
 
 ## Changelog
 
+### v2.1.9
+- Add min-swap fee gate to `executeRebalance` — swaps worth less than the configured USD floor are skipped to prevent fee bleed on small drift corrections
+- New "Min swap ($)" setting in basket settings panel (default $5, configurable at runtime)
+
 ### v2.1.8
 - Rebalance log now paginates at 12 entries per page with prev/next controls
 

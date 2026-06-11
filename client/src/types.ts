@@ -43,6 +43,7 @@ export interface BasketState {
     hwmHalfLifeDays: number;
     curvePoints: Array<[number, number]>;
     curveCap: number;
+    minSwapUsd: number;
   };
   holdings: TokenHolding[];
   totalValueSol: number;
