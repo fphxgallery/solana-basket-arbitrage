@@ -98,7 +98,8 @@ export async function notify(message: string): Promise<void> {
 export async function sendDailyReport(): Promise<void> {
   if (!config?.token || !config?.chatId) return;
 
-  const { holdings, totalValueSol, totalValueUsd, baselineTimestamp, pnlUsd, pnlPctUsd } = basketStore;
+  const { holdings, totalValueSol, totalValueUsd, baselineTimestamp, pnlUsd, pnlPctUsd, hwmValueUsd, hwmCapturedAt } = basketStore;
+  const basketConfig = basketStore.config;
   const solUsd = await getSolUsd();
   const walletSol = store.walletBalanceSol;
 
@@ -122,6 +123,16 @@ export async function sendDailyReport(): Promise<void> {
       msg += ` since ${since}`;
     }
     msg += `\n`;
+  }
+
+  if (basketConfig.hwmEnabled && hwmValueUsd != null && hwmCapturedAt != null) {
+    const elapsedDays = (Date.now() - hwmCapturedAt) / 86_400_000;
+    const halfLife = basketConfig.hwmHalfLifeDays ?? 7;
+    const toHalfLife = halfLife - elapsedDays;
+    const timeStr = toHalfLife > 0
+      ? (toHalfLife >= 1 ? `${toHalfLife.toFixed(1)}d` : `${(toHalfLife * 24).toFixed(0)}h`) + " to ½"
+      : "past ½-life";
+    msg += `🏔 Peak: <b>$${hwmValueUsd.toFixed(2)}</b> (${timeStr})\n`;
   }
 
   if (walletSol != null) {

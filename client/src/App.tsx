@@ -859,9 +859,25 @@ function Dashboard() {
 
           {/* P&L */}
           <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
-            <div className="flex items-center gap-2 text-gray-400 text-xs mb-3">
-              <TrendingUp className="w-3.5 h-3.5" />
-              P&L
+            <div className="flex items-center justify-between text-gray-400 text-xs mb-3">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="w-3.5 h-3.5" />
+                P&L
+              </div>
+              {basket != null && basket.config.hwmEnabled && basket.hwmValueUsd != null && basket.hwmCapturedAt != null && (() => {
+                const elapsedDays = (Date.now() - basket.hwmCapturedAt) / 86_400_000;
+                const halfLife = basket.config.hwmHalfLifeDays ?? 7;
+                const toHalfLife = halfLife - elapsedDays;
+                const timeLabel = toHalfLife > 0
+                  ? (toHalfLife >= 1 ? `${toHalfLife.toFixed(1)}d` : `${(toHalfLife * 24).toFixed(0)}h`) + " to ½"
+                  : "past ½-life";
+                return (
+                  <div className="text-right leading-tight">
+                    <div className="text-gray-400">Peak ${basket.hwmValueUsd.toFixed(2)}</div>
+                    <div className={toHalfLife > 0 ? "text-gray-600" : "text-gray-700"}>{timeLabel}</div>
+                  </div>
+                );
+              })()}
             </div>
             {basket?.pnlUsd != null ? (
               <>

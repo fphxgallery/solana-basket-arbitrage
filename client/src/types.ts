@@ -56,6 +56,8 @@ export interface BasketState {
   pnlPct: number | null;
   pnlUsd: number | null;
   pnlPctUsd: number | null;
+  hwmValueUsd: number | null;
+  hwmCapturedAt: number | null;
 }
 
 export interface ValuePoint {

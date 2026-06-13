@@ -36,6 +36,8 @@ function basketSnapshot() {
     pnlPct: basketStore.pnlPct,
     pnlUsd: basketStore.pnlUsd,
     pnlPctUsd: basketStore.pnlPctUsd,
+    hwmValueUsd: basketStore.hwmValueUsd,
+    hwmCapturedAt: basketStore.hwmCapturedAt,
   };
 }
 
